@@ -4,6 +4,8 @@ import { ChevronLeft, Download, Send, Edit } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/api"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
+import { Invoice } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
 
 interface InvoiceDetailEnhancedProps {
   onNavigate: (page: string, invoiceId?: string) => void
@@ -12,6 +14,7 @@ interface InvoiceDetailEnhancedProps {
 
 export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: InvoiceDetailEnhancedProps) {
   const { invoices, settings } = useStore()
+  const { toast } = useToast()
   
   const invoice = invoiceId ? invoices.find((inv) => inv.id === invoiceId) : null
 
@@ -48,6 +51,8 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
         return "bg-yellow-100 text-yellow-800"
       case "overdue":
         return "bg-red-100 text-red-800"
+      case "imported":
+        return "bg-blue-100 text-blue-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -61,9 +66,85 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
         return "未払い"
       case "overdue":
         return "期限切れ"
+      case "imported":
+        return "インポート"
       default:
         return "下書き"
     }
+  }
+
+  // 元のPDFをダウンロードする関数
+  const downloadOriginalPDF = (invoice: Invoice) => {
+    const originalAttachmentId = invoice.originalPdfAttachmentId
+    
+    if (!originalAttachmentId) {
+      alert("元のPDFファイルが見つかりません")
+      return
+    }
+    
+    const originalAttachment = invoice.attachments?.find(
+      att => att.id === originalAttachmentId
+    )
+    
+    if (!originalAttachment) {
+      alert("元のPDFファイルが見つかりません")
+      return
+    }
+    
+    // Base64データをBlobに変換
+    const byteString = atob(originalAttachment.base64Data.split(',')[1])
+    const ab = new ArrayBuffer(byteString.length)
+    const ia = new Uint8Array(ab)
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i)
+    }
+    const blob = new Blob([ab], { type: originalAttachment.fileType })
+    
+    // ダウンロード
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = originalAttachment.fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // 編集ボタンのハンドラー
+  const handleEdit = () => {
+    onNavigate("invoice-edit", invoice.id)
+  }
+
+  // メール送信ボタンのハンドラー
+  const handleSendEmail = () => {
+    const email = invoice.client.email
+    
+    if (!email) {
+      toast({
+        title: "エラー",
+        description: "請求先のメールアドレスが登録されていません",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const subject = encodeURIComponent(`請求書 ${invoice.invoiceNumber}`)
+    const body = encodeURIComponent(
+      `${invoice.client.name} 様\n\n` +
+      `請求書 ${invoice.invoiceNumber} を送付いたします。\n\n` +
+      `請求金額: ${formatCurrency(invoice.total)}\n` +
+      `発行日: ${formatDate(invoice.issueDate)}\n` +
+      `期限日: ${formatDate(invoice.dueDate)}\n\n` +
+      `よろしくお願いいたします。`
+    )
+    
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
+    
+    toast({
+      title: "メール送信",
+      description: `${email} 宛にメールクライアントを開きました`,
+    })
   }
 
   return (
@@ -184,48 +265,95 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
 
           {/* Actions */}
           <div className="space-y-2">
-            <button
-              onClick={() => downloadInvoicePDFJapanese(invoice, settings.company)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              <Download size={18} />
-              PDFダウンロード
-            </button>
-            <button className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-primary text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors">
-              <Send size={18} />
-              メール送信
-            </button>
-            <button className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors">
-              <Edit size={18} />
-              編集
-            </button>
+            {/* インポートデータの場合は元のPDFをダウンロード */}
+            {(invoice.source === "pdf_import" || invoice.source === "image_import") ? (
+              <button
+                onClick={() => downloadOriginalPDF(invoice)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                <Download size={18} />
+                元のPDFダウンロード
+              </button>
+            ) : (
+              <>
+                {/* 手動作成データの場合は通常のボタンを表示 */}
+                <button
+                  onClick={() => downloadInvoicePDFJapanese(invoice, settings.company)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  <Download size={18} />
+                  PDFダウンロード
+                </button>
+                <button
+                  onClick={handleSendEmail}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-primary text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors"
+                >
+                  <Send size={18} />
+                  メール送信
+                </button>
+                <button
+                  onClick={handleEdit}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors"
+                >
+                  <Edit size={18} />
+                  編集
+                </button>
+              </>
+            )}
           </div>
 
           {/* Payment Info */}
           <div className="bg-card border border-border rounded-lg p-6">
             <p className="text-sm text-muted-foreground mb-4 font-semibold">支払情報</p>
-            <div className="space-y-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">銀行振込先</p>
-                <p className="font-semibold text-foreground">
-                  {invoice.paymentInfo?.bankName || settings.company.bankName} {invoice.paymentInfo?.branchName || settings.company.branchName}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">口座種別</p>
-                <p className="font-semibold text-foreground">{invoice.paymentInfo?.accountType || settings.company.accountType}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">口座番号</p>
-                <p className="font-semibold text-foreground">{invoice.paymentInfo?.accountNumber || settings.company.accountNumber}</p>
-              </div>
-              {invoice.paymentInfo?.accountHolder && (
-                <div>
-                  <p className="text-muted-foreground">口座名義</p>
-                  <p className="font-semibold text-foreground">{invoice.paymentInfo.accountHolder}</p>
+            
+            {/* インポートデータの場合は元のPDFの支払先情報を表示 */}
+            {(invoice.source === "pdf_import" || invoice.source === "image_import") && invoice.paymentInfo ? (
+              <div className="space-y-3 text-sm">
+                <div className="bg-blue-50 p-3 rounded mb-3">
+                  <p className="text-xs text-blue-800">
+                    ※ インポートされたPDFの支払先情報
+                  </p>
                 </div>
-              )}
-            </div>
+                <div>
+                  <p className="text-muted-foreground">銀行振込先</p>
+                  <p className="font-semibold text-foreground">
+                    {invoice.paymentInfo.bankName} {invoice.paymentInfo.branchName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">口座種別</p>
+                  <p className="font-semibold text-foreground">{invoice.paymentInfo.accountType}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">口座番号</p>
+                  <p className="font-semibold text-foreground">{invoice.paymentInfo.accountNumber}</p>
+                </div>
+                {invoice.paymentInfo.accountHolder && (
+                  <div>
+                    <p className="text-muted-foreground">口座名義</p>
+                    <p className="font-semibold text-foreground">{invoice.paymentInfo.accountHolder}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* 手動作成データの場合はシステム設定の自社情報を表示 */
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">銀行振込先</p>
+                  <p className="font-semibold text-foreground">
+                    {settings.company.bankName} {settings.company.branchName}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">口座種別</p>
+                  <p className="font-semibold text-foreground">{settings.company.accountType}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">口座番号</p>
+                  <p className="font-semibold text-foreground">{settings.company.accountNumber}</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

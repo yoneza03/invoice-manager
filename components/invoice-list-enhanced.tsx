@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, Download, Trash2, Eye } from "lucide-react"
+import { ChevronLeft, Download, Trash2, Eye, Edit, Mail } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/api"
 import { InvoiceStatus } from "@/lib/types"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
+import { useToast } from "@/hooks/use-toast"
 
 interface InvoiceListEnhancedProps {
   onNavigate: (page: string, invoiceId?: string) => void
@@ -13,6 +14,7 @@ interface InvoiceListEnhancedProps {
 
 export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedProps) {
   const { invoices, deleteInvoice, settings } = useStore()
+  const { toast } = useToast()
   const [filter, setFilter] = useState<string>("all")
 
   const filteredInvoices = filter === "all" ? invoices : invoices.filter((inv) => inv.status === filter)
@@ -23,6 +25,40 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
     }
   }
 
+  const handleEdit = (id: string) => {
+    onNavigate("invoice-edit", id)
+  }
+
+  const handleSendEmail = (invoice: typeof invoices[0]) => {
+    const email = invoice.client.email
+    
+    if (!email) {
+      toast({
+        title: "エラー",
+        description: "請求先のメールアドレスが登録されていません",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const subject = encodeURIComponent(`請求書 ${invoice.invoiceNumber}`)
+    const body = encodeURIComponent(
+      `${invoice.client.name} 様\n\n` +
+      `請求書 ${invoice.invoiceNumber} を送付いたします。\n\n` +
+      `請求金額: ${formatCurrency(invoice.total)}\n` +
+      `発行日: ${formatDate(invoice.issueDate)}\n` +
+      `期限日: ${formatDate(invoice.dueDate)}\n\n` +
+      `よろしくお願いいたします。`
+    )
+    
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
+    
+    toast({
+      title: "メール送信",
+      description: `${email} 宛にメールクライアントを開きました`,
+    })
+  }
+
   const getStatusText = (status: InvoiceStatus) => {
     switch (status) {
       case "paid":
@@ -31,6 +67,8 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
         return "未払い"
       case "overdue":
         return "期限切れ"
+      case "imported":
+        return "インポート"
       default:
         return "下書き"
     }
@@ -50,7 +88,7 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {["all", "paid", "pending", "overdue"].map((status) => (
+        {["all", "paid", "pending", "overdue", "imported"].map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -64,7 +102,9 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                 ? "支払済み"
                 : status === "pending"
                   ? "未払い"
-                  : "期限切れ"}
+                  : status === "overdue"
+                    ? "期限切れ"
+                    : "インポート"}
           </button>
         ))}
       </div>
@@ -97,7 +137,11 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                           ? "bg-green-100 text-green-800"
                           : invoice.status === "pending"
                             ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
+                            : invoice.status === "overdue"
+                              ? "bg-red-100 text-red-800"
+                              : invoice.status === "imported"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-gray-100 text-gray-800"
                       }`}
                     >
                       {getStatusText(invoice.status)}
@@ -107,13 +151,31 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                   <td className="py-4 px-6 text-sm text-muted-foreground">{formatDate(invoice.dueDate)}</td>
                   <td className="py-4 px-6 text-sm">
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={() => onNavigate("detail", invoice.id)}
-                        className="p-2 hover:bg-muted rounded-lg transition-colors" 
+                        className="p-2 hover:bg-muted rounded-lg transition-colors"
                         title="詳細表示"
                       >
                         <Eye size={18} className="text-primary" />
                       </button>
+                      {!invoice.isReadonly && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(invoice.id)}
+                            className="p-2 hover:bg-muted rounded-lg transition-colors"
+                            title="編集"
+                          >
+                            <Edit size={18} className="text-blue-600" />
+                          </button>
+                          <button
+                            onClick={() => handleSendEmail(invoice)}
+                            className="p-2 hover:bg-muted rounded-lg transition-colors"
+                            title="メール送信"
+                          >
+                            <Mail size={18} className="text-green-600" />
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -124,9 +186,9 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                       >
                         <Download size={18} className="text-accent" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(invoice.id, invoice.invoiceNumber)}
-                        className="p-2 hover:bg-muted rounded-lg transition-colors" 
+                        className="p-2 hover:bg-muted rounded-lg transition-colors"
                         title="削除"
                       >
                         <Trash2 size={18} className="text-destructive" />

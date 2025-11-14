@@ -51,6 +51,8 @@ export class InvoiceImportService {
         ocrData,
         createdAt: new Date(),
         updatedAt: new Date(),
+        isReadonly: true,
+        originalPdfAttachmentId: attachment.id,
       },
       attachment,
       ocrData,
@@ -175,7 +177,7 @@ export class InvoiceImportService {
       tax,
       taxRate,
       total,
-      status: "draft",
+      status: "imported",
       paymentInfo: hasPaymentInfo ? paymentInfo : undefined,
     }
   }

@@ -1,5 +1,5 @@
 // 請求書のステータス
-export type InvoiceStatus = "paid" | "pending" | "overdue" | "draft"
+export type InvoiceStatus = "paid" | "pending" | "overdue" | "draft" | "imported"
 
 // 請求書のデータソース
 export type InvoiceSource = "manual" | "pdf_import" | "image_import"
@@ -20,6 +20,9 @@ export interface Client {
   email: string
   address: string
   phone?: string
+  postalCode?: string
+  contactPerson?: string
+  memo?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -45,6 +48,8 @@ export interface Invoice {
   attachments?: InvoiceAttachment[]
   ocrData?: OCRResult
   paymentInfo?: PaymentInfo
+  isReadonly?: boolean
+  originalPdfAttachmentId?: string
 }
 
 // 添付ファイル

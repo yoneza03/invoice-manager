@@ -9,18 +9,27 @@ import InvoiceImport from "@/components/invoice-import"
 import PaymentManagement from "@/components/payment-management"
 import SearchFilterEnhanced from "@/components/search-filter-enhanced"
 import SettingsEnhanced from "@/components/settings-enhanced"
+import ClientManagement from "@/components/client-management"
 import Sidebar from "@/components/sidebar"
 
-type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings"
+type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients"
 
 export default function Home() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard")
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
 
   const handleNavigate = (page: string, invoiceId?: string) => {
-    setCurrentPage(page as Page)
-    if (invoiceId) {
-      setSelectedInvoiceId(invoiceId)
+    if (page === "invoice-edit") {
+      // 編集モードの場合はcreateページに遷移してinvoiceIdを渡す
+      setCurrentPage("create")
+      setEditingInvoiceId(invoiceId || null)
+    } else {
+      setCurrentPage(page as Page)
+      setEditingInvoiceId(null)
+      if (invoiceId) {
+        setSelectedInvoiceId(invoiceId)
+      }
     }
   }
 
@@ -33,9 +42,11 @@ export default function Home() {
       case "detail":
         return <InvoiceDetailEnhanced onNavigate={handleNavigate} invoiceId={selectedInvoiceId} />
       case "create":
-        return <InvoiceCreateEnhanced onNavigate={handleNavigate} />
+        return <InvoiceCreateEnhanced onNavigate={handleNavigate} invoiceId={editingInvoiceId} />
       case "import":
         return <InvoiceImport />
+      case "clients":
+        return <ClientManagement onNavigate={handleNavigate} />
       case "payments":
         return <PaymentManagement onNavigate={handleNavigate} />
       case "search":

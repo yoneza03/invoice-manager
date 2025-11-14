@@ -14,6 +14,7 @@ interface StoreContextType {
   deleteInvoice: (id: string) => void
   addClient: (client: Client) => void
   updateClient: (id: string, client: Partial<Client>) => void
+  deleteClient: (id: string) => void
   updateSettings: (settings: Partial<Settings>) => void
   addPayment: (payment: Payment) => void
   getInvoiceById: (id: string) => Invoice | undefined
@@ -75,7 +76,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   const updateClient = (id: string, updatedClient: Partial<Client>) => {
-    setClients(clients.map((client: Client) => (client.id === id ? { ...client, ...updatedClient } : client)))
+    setClients(clients.map((client: Client) => (client.id === id ? { ...client, ...updatedClient, updatedAt: new Date() } : client)))
+  }
+
+  const deleteClient = (id: string) => {
+    setClients(clients.filter((client: Client) => client.id !== id))
   }
 
   const updateSettings = (updatedSettings: Partial<Settings>) => {
@@ -111,6 +116,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         deleteInvoice,
         addClient,
         updateClient,
+        deleteClient,
         updateSettings,
         addPayment,
         getInvoiceById,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ChevronLeft, Plus, Trash2 } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { generateInvoiceNumber, generateId, calculateTax, calculateTotal } from "@/lib/api"
@@ -8,6 +8,7 @@ import { Invoice, InvoiceLineItem, Client } from "@/lib/types"
 
 interface InvoiceCreateEnhancedProps {
   onNavigate: (page: string) => void
+  invoiceId?: string | null
 }
 
 interface LineItem {
@@ -17,8 +18,8 @@ interface LineItem {
   unitPrice: number
 }
 
-export default function InvoiceCreateEnhanced({ onNavigate }: InvoiceCreateEnhancedProps) {
-  const { addInvoice, clients, settings } = useStore()
+export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: InvoiceCreateEnhancedProps) {
+  const { addInvoice, updateInvoice, getInvoiceById, clients, settings } = useStore()
   
   const [selectedClient, setSelectedClient] = useState<string>("")
   const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().split("T")[0])
@@ -27,6 +28,27 @@ export default function InvoiceCreateEnhanced({ onNavigate }: InvoiceCreateEnhan
     { id: generateId("item"), description: "", quantity: 1, unitPrice: 0 },
   ])
   const [notes, setNotes] = useState<string>("")
+  const [isEditMode, setIsEditMode] = useState<boolean>(false)
+
+  // 編集モードの場合、請求書データを読み込む
+  useEffect(() => {
+    if (invoiceId) {
+      const invoice = getInvoiceById(invoiceId)
+      if (invoice) {
+        setIsEditMode(true)
+        setSelectedClient(invoice.client.id)
+        setIssueDate(new Date(invoice.issueDate).toISOString().split("T")[0])
+        setDueDate(new Date(invoice.dueDate).toISOString().split("T")[0])
+        setItems(invoice.lineItems.map(item => ({
+          id: item.id,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })))
+        setNotes(invoice.notes || "")
+      }
+    }
+  }, [invoiceId, getInvoiceById])
 
   const addItem = () => {
     setItems([...items, { id: generateId("item"), description: "", quantity: 1, unitPrice: 0 }])
@@ -85,25 +107,42 @@ export default function InvoiceCreateEnhanced({ onNavigate }: InvoiceCreateEnhan
       amount: item.quantity * item.unitPrice,
     }))
 
-    const newInvoice: Invoice = {
-      id: generateId("inv"),
-      invoiceNumber: generateInvoiceNumber(),
-      client: client,
-      issueDate: new Date(issueDate),
-      dueDate: new Date(dueDate),
-      lineItems: lineItems,
-      subtotal: subtotal,
-      tax: tax,
-      taxRate: settings.company.taxRate,
-      total: total,
-      status: "pending",
-      notes: notes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    if (isEditMode && invoiceId) {
+      // 更新モード
+      updateInvoice(invoiceId, {
+        client: client,
+        issueDate: new Date(issueDate),
+        dueDate: new Date(dueDate),
+        lineItems: lineItems,
+        subtotal: subtotal,
+        tax: tax,
+        taxRate: settings.company.taxRate,
+        total: total,
+        notes: notes,
+        updatedAt: new Date(),
+      })
+      alert("請求書を更新しました")
+    } else {
+      // 新規作成モード
+      const newInvoice: Invoice = {
+        id: generateId("inv"),
+        invoiceNumber: generateInvoiceNumber(),
+        client: client,
+        issueDate: new Date(issueDate),
+        dueDate: new Date(dueDate),
+        lineItems: lineItems,
+        subtotal: subtotal,
+        tax: tax,
+        taxRate: settings.company.taxRate,
+        total: total,
+        status: "pending",
+        notes: notes,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      addInvoice(newInvoice)
+      alert("請求書を作成しました")
     }
-
-    addInvoice(newInvoice)
-    alert("請求書を作成しました")
     onNavigate("invoices")
   }
 
@@ -118,8 +157,8 @@ export default function InvoiceCreateEnhanced({ onNavigate }: InvoiceCreateEnhan
           <ChevronLeft size={24} />
         </button>
         <div>
-          <h1 className="text-4xl font-bold text-foreground">新規請求書作成</h1>
-          <p className="text-muted-foreground">請求書を作成します</p>
+          <h1 className="text-4xl font-bold text-foreground">{isEditMode ? "請求書編集" : "新規請求書作成"}</h1>
+          <p className="text-muted-foreground">{isEditMode ? "請求書を編集します" : "請求書を作成します"}</p>
         </div>
       </div>
 
@@ -258,7 +297,7 @@ export default function InvoiceCreateEnhanced({ onNavigate }: InvoiceCreateEnhan
               onClick={handleSubmit}
               className="w-full px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
             >
-              請求書作成
+              {isEditMode ? "請求書更新" : "請求書作成"}
             </button>
             <button
               onClick={() => onNavigate("invoices")}
