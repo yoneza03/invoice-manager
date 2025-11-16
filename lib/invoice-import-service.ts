@@ -1,4 +1,4 @@
-import { Invoice, InvoiceAttachment, InvoiceSource, OCRResult, Client } from "./types"
+import { Invoice, InvoiceAttachment, InvoiceSource, OCRResult, Client, InvoiceLineItem } from "./types"
 import { ocrProcessor } from "./ocr-processor"
 import { createAttachment, pdfToImage, validateFile } from "./file-processor"
 
@@ -164,15 +164,7 @@ export class InvoiceImportService {
       client,
       issueDate,
       dueDate,
-      lineItems: [
-        {
-          id: `li_${Date.now()}`,
-          description: "インポートされた項目（要編集）",
-          quantity: 1,
-          unitPrice: subtotal,
-          amount: subtotal,
-        },
-      ],
+      lineItems: this.buildLineItems(extractedFields, subtotal),
       subtotal,
       tax,
       taxRate,
@@ -208,6 +200,52 @@ export class InvoiceImportService {
     }
 
     return results
+  }
+
+  /**
+   * OCRから抽出した明細行を構築
+   */
+  private buildLineItems(
+    extractedFields: OCRResult["extractedFields"],
+    subtotal: number
+  ): InvoiceLineItem[] {
+    // OCRで明細行が抽出されている場合
+    if (extractedFields.lineItems && extractedFields.lineItems.length > 0) {
+      return extractedFields.lineItems.map((item, index) => {
+        const quantity = item.quantity
+          ? parseFloat(item.quantity.value)
+          : 1
+        
+        const unitPrice = item.unitPrice
+          ? parseFloat(item.unitPrice.value)
+          : item.amount
+          ? parseFloat(item.amount.value) / quantity
+          : 0
+
+        const amount = item.amount
+          ? parseFloat(item.amount.value)
+          : unitPrice * quantity
+
+        return {
+          id: `li_${Date.now()}_${index}`,
+          description: item.description.value,
+          quantity,
+          unitPrice,
+          amount,
+        }
+      })
+    }
+
+    // 明細行が抽出されていない場合は従来通りダミーデータ
+    return [
+      {
+        id: `li_${Date.now()}`,
+        description: "インポートされた項目（要編集）",
+        quantity: 1,
+        unitPrice: subtotal,
+        amount: subtotal,
+      },
+    ]
   }
 }
 

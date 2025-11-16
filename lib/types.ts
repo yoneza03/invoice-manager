@@ -79,6 +79,12 @@ export interface OCRResult {
     accountType?: FieldExtraction
     accountNumber?: FieldExtraction
     accountHolder?: FieldExtraction
+    lineItems?: Array<{
+      description: FieldExtraction
+      quantity?: FieldExtraction
+      unitPrice?: FieldExtraction
+      amount?: FieldExtraction
+    }>
   }
 }
 
