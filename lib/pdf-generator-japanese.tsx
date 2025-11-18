@@ -164,6 +164,10 @@ const styles = StyleSheet.create({
 
 // PDFドキュメントコンポーネント
 const InvoicePDF = ({ invoice, companyInfo }: { invoice: Invoice; companyInfo: any }) => {
+  console.log('Invoice data:', invoice)
+  console.log('IssuerInfo:', invoice.issuerInfo)
+  console.log('CompanyInfo:', companyInfo)
+  
   const statusText = invoice.status === "paid" ? "支払済" : invoice.status === "pending" ? "未払" : "期限切"
   const statusColor = invoice.status === "paid" ? "#22c55e" : invoice.status === "overdue" ? "#ef4444" : "#f59e0b"
 
@@ -191,15 +195,28 @@ const InvoicePDF = ({ invoice, companyInfo }: { invoice: Invoice; companyInfo: a
         <View style={styles.parties}>
           <View style={styles.party}>
             <Text style={styles.partyTitle}>発行者</Text>
-            <Text style={styles.partyName}>{companyInfo.name}</Text>
-            {companyInfo.registrationNumber && (
-              <Text style={styles.registrationNumber}>
-                登録番号: {companyInfo.registrationNumber}
-              </Text>
+            {invoice.issuerInfo ? (
+              <>
+                <Text style={styles.partyName}>{invoice.issuerInfo.name}</Text>
+                {invoice.issuerInfo.registrationNumber && (
+                  <Text style={styles.registrationNumber}>
+                    登録番号: {invoice.issuerInfo.registrationNumber}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.partyName}>{companyInfo.name}</Text>
+                {companyInfo.registrationNumber && (
+                  <Text style={styles.registrationNumber}>
+                    登録番号: {companyInfo.registrationNumber}
+                  </Text>
+                )}
+                <Text style={styles.partyDetails}>{companyInfo.address}</Text>
+                <Text style={styles.partyDetails}>{companyInfo.email}</Text>
+                <Text style={styles.partyDetails}>{companyInfo.phone}</Text>
+              </>
             )}
-            <Text style={styles.partyDetails}>{companyInfo.address}</Text>
-            <Text style={styles.partyDetails}>{companyInfo.email}</Text>
-            <Text style={styles.partyDetails}>{companyInfo.phone}</Text>
           </View>
           <View style={styles.party}>
             <Text style={styles.partyTitle}>請求先</Text>

@@ -443,6 +443,12 @@ export class OCRProcessor {
       fields.issuerRegistrationNumber = registrationNumber
     }
 
+    // 🆕 発行元企業名の抽出
+    const issuerName = this.extractIssuerName(text)
+    if (issuerName) {
+      fields.issuerName = issuerName
+    }
+
     // 明細行(品名)の抽出
     const lineItems = this.extractLineItems(text, lines, fields)
     if (lineItems.length > 0) {
@@ -462,7 +468,7 @@ export class OCRProcessor {
     // パターン1: ラベル付き（最も信頼度が高い）
     // OCR誤認識対応: 空白が入る可能性を考慮
     const labeledPatterns = [
-      /(?:適格請求書発行事業者登録番号|登録\s*番号|登録\s*No\.?|登録\s*ナンバー|Registration\s*Number|Reg\.?\s*No\.?|インボイス番号|Invoice\s*No)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
+      /(?:適格請求書発行事業者登録番号|登録\s*番\s*号|登録\s*No\.?|登録\s*ナンバー|Registration\s*Number|Reg\.?\s*No\.?|インボイス番号|Invoice\s*No)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
       /(?:インボイス|Invoice)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
       /(?:T番号)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
     ]
@@ -525,6 +531,50 @@ export class OCRProcessor {
     normalized = normalized.toUpperCase()
     
     return normalized
+  }
+
+  /**
+   * 発行元企業名の抽出
+   *
+   * 請求先(御中、様付き)より後に出現する企業名を抽出
+   * 「株式会社○○」または「○○株式会社」のパターンに対応
+   */
+  private extractIssuerName(text: string): FieldExtraction | undefined {
+    // 請求先(御中、様付き)の位置を特定
+    const clientPattern = /([^\n]+?)(?:様|御中|宛)/
+    const clientMatch = text.match(clientPattern)
+    
+    let searchText = text
+    if (clientMatch) {
+      // 請求先より後のテキストを検索対象にする
+      const clientIndex = text.indexOf(clientMatch[0])
+      if (clientIndex !== -1) {
+        searchText = text.substring(clientIndex + clientMatch[0].length)
+      }
+    }
+    
+    // 企業名パターン: 「株式会社○○」または「○○株式会社」
+    const companyPatterns = [
+      /株式会社\s*([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９]{2,20})/,
+      /([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９]{2,20})\s*株式会社/,
+    ]
+    
+    for (const pattern of companyPatterns) {
+      const match = searchText.match(pattern)
+      if (match) {
+        const companyName = match[0].replace(/\s+/g, '').trim()
+        if (companyName.length >= 4 && companyName.length <= 30) {
+          console.log(`発行元企業名検出: ${companyName}`)
+          return {
+            value: companyName,
+            confidence: 0.8,
+          }
+        }
+      }
+    }
+    
+    console.log('発行元企業名は検出されませんでした')
+    return undefined
   }
 
   /**

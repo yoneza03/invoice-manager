@@ -81,6 +81,7 @@ export interface OCRResult {
     accountNumber?: FieldExtraction
     accountHolder?: FieldExtraction
     issuerRegistrationNumber?: FieldExtraction  // 🆕 適格請求書発行事業者登録番号
+    issuerName?: FieldExtraction  // 🆕 発行元企業名
     lineItems?: Array<{
       description: FieldExtraction
       quantity?: FieldExtraction

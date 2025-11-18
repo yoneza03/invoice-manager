@@ -258,14 +258,14 @@ export class InvoiceImportService {
   private buildIssuerInfo(
     extractedFields: OCRResult["extractedFields"]
   ): IssuerInfo | undefined {
-    // 登録番号が抽出されている場合のみIssuerInfoを作成
-    if (!extractedFields.issuerRegistrationNumber) {
+    // 登録番号または企業名が抽出されている場合のみIssuerInfoを作成
+    if (!extractedFields.issuerRegistrationNumber && !extractedFields.issuerName) {
       return undefined
     }
 
     const issuerInfo: IssuerInfo = {
-      name: "インポート元企業",
-      registrationNumber: extractedFields.issuerRegistrationNumber.value,
+      name: extractedFields.issuerName?.value || "インポート元企業",
+      registrationNumber: extractedFields.issuerRegistrationNumber?.value,
     }
 
     return issuerInfo
