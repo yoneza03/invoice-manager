@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { StoreProvider } from '@/lib/store'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/toaster'
 
 export const metadata: Metadata = {
   title: '請求書管理システム | Invoice Management System',
@@ -23,6 +24,7 @@ export default function RootLayout({
             {children}
             <Analytics />
           </StoreProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

@@ -178,7 +178,7 @@ export function sortInvoices(invoices: Invoice[], sortBy: "date" | "amount" | "s
       case "amount":
         return b.total - a.total
       case "status":
-        const statusOrder = { paid: 0, pending: 1, overdue: 2, draft: 3 }
+        const statusOrder: Record<InvoiceStatus, number> = { paid: 0, pending: 1, overdue: 2, draft: 3, imported: 4 }
         return statusOrder[a.status] - statusOrder[b.status]
       default:
         return 0
@@ -186,4 +186,33 @@ export function sortInvoices(invoices: Invoice[], sortBy: "date" | "amount" | "s
   })
 
   return order === "asc" ? sorted.reverse() : sorted
+}
+
+/**
+ * 適格請求書発行事業者登録番号のバリデーション（改良版）
+ * @param value 登録番号（T + 13桁の数字）
+ * @returns バリデーション結果とエラーメッセージ
+ */
+export function validateRegistrationNumber(
+  value: string
+): { valid: boolean; error?: string } {
+  // 空文字チェック（必須化）
+  if (!value || value.trim() === '') {
+    return {
+      valid: false,
+      error: '登録番号を入力してください'
+    }
+  }
+  
+  const trimmed = value.trim()
+  
+  // 形式チェック: T + 13桁
+  if (!/^T\d{13}$/.test(trimmed)) {
+    return {
+      valid: false,
+      error: '登録番号はT+13桁の数字で入力してください（例: T1234567890123）'
+    }
+  }
+  
+  return { valid: true }
 }

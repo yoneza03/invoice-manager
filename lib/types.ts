@@ -50,6 +50,7 @@ export interface Invoice {
   paymentInfo?: PaymentInfo
   isReadonly?: boolean
   originalPdfAttachmentId?: string
+  issuerInfo?: IssuerInfo  // 🆕 発行元情報（インポート請求書用）
 }
 
 // 添付ファイル
@@ -79,6 +80,7 @@ export interface OCRResult {
     accountType?: FieldExtraction
     accountNumber?: FieldExtraction
     accountHolder?: FieldExtraction
+    issuerRegistrationNumber?: FieldExtraction  // 🆕 適格請求書発行事業者登録番号
     lineItems?: Array<{
       description: FieldExtraction
       quantity?: FieldExtraction
@@ -114,6 +116,15 @@ export interface Payment {
   createdAt: Date
 }
 
+// 発行者情報（インポート相手企業）
+export interface IssuerInfo {
+  name: string
+  address?: string
+  phone?: string
+  email?: string
+  registrationNumber?: string // 適格請求書発行事業者登録番号
+}
+
 // 企業設定
 export interface CompanySettings {
   name: string
@@ -125,6 +136,7 @@ export interface CompanySettings {
   accountType: "普通預金" | "当座預金"
   accountNumber: string
   taxRate: number
+  registrationNumber?: string
 }
 
 // 通知設定
@@ -160,4 +172,14 @@ export interface DashboardStats {
   paidCount: number
   pendingCount: number
   overdueCount: number
+}
+
+/**
+ * 適格請求書発行事業者登録番号のバリデーション
+ * @param value 登録番号（T + 13桁の数字）
+ * @returns バリデーション結果
+ */
+export function validateRegistrationNumber(value: string): boolean {
+  const regex = /^T\d{13}$/
+  return regex.test(value)
 }

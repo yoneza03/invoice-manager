@@ -437,6 +437,12 @@ export class OCRProcessor {
       }
     }
 
+    // 🆕 適格請求書発行事業者登録番号の抽出
+    const registrationNumber = this.extractRegistrationNumber(text)
+    if (registrationNumber) {
+      fields.issuerRegistrationNumber = registrationNumber
+    }
+
     // 明細行(品名)の抽出
     const lineItems = this.extractLineItems(text, lines, fields)
     if (lineItems.length > 0) {
@@ -444,6 +450,81 @@ export class OCRProcessor {
     }
 
     return fields
+  }
+
+  /**
+   * 適格請求書発行事業者登録番号の抽出
+   *
+   * フォーマット: T + 13桁の数字
+   * 例: T1234567890123
+   */
+  private extractRegistrationNumber(text: string): FieldExtraction | undefined {
+    // パターン1: ラベル付き（最も信頼度が高い）
+    // OCR誤認識対応: 空白が入る可能性を考慮
+    const labeledPatterns = [
+      /(?:適格請求書発行事業者登録番号|登録\s*番号|登録\s*No\.?|登録\s*ナンバー|Registration\s*Number|Reg\.?\s*No\.?|インボイス番号|Invoice\s*No)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
+      /(?:インボイス|Invoice)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
+      /(?:T番号)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
+    ]
+    
+    for (const pattern of labeledPatterns) {
+      const match = text.match(pattern)
+      if (match) {
+        const value = this.normalizeRegistrationNumber(match[1])
+        // 正規化後に正しいフォーマットかチェック
+        if (/^T\d{13}$/.test(value)) {
+          console.log(`登録番号検出(ラベル付き): ${value}`)
+          return {
+            value: value,
+            confidence: 0.95,
+          }
+        }
+      }
+    }
+    
+    // パターン2: ラベルなしでT + 13桁を検出（空白混入対応）
+    const unlabeledPattern = /\b([TtＴ][Il1l]?\s*\d[\s\d]{12,})\b/
+    const unlabeledMatch = text.match(unlabeledPattern)
+    
+    if (unlabeledMatch) {
+      const value = this.normalizeRegistrationNumber(unlabeledMatch[1])
+      // 正規化後に正しいフォーマットかチェック
+      if (/^T\d{13}$/.test(value)) {
+        console.log(`登録番号検出(ラベルなし): ${value}`)
+        return {
+          value: value,
+          confidence: 0.7,
+        }
+      }
+    }
+    
+    console.log('登録番号は検出されませんでした')
+    return undefined
+  }
+
+  /**
+   * 登録番号の正規化
+   * OCR誤認識を補正
+   */
+  private normalizeRegistrationNumber(value: string): string {
+    // 空白を除去
+    let normalized = value.replace(/\s+/g, '')
+    
+    // 全角文字を半角に変換
+    normalized = normalized.replace(/[Ｔ]/g, 'T')
+    normalized = normalized.replace(/[０-９]/g, (s) =>
+      String.fromCharCode(s.charCodeAt(0) - 0xFEE0)
+    )
+    
+    // 先頭のI, 1, l, t を T に変換（OCR誤認識対策）
+    if (/^[Il1lt]/.test(normalized)) {
+      normalized = 'T' + normalized.substring(1)
+    }
+    
+    // 大文字に統一
+    normalized = normalized.toUpperCase()
+    
+    return normalized
   }
 
   /**

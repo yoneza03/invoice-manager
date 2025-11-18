@@ -4,6 +4,8 @@ import { useState } from "react"
 import { ChevronLeft, Save } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { Settings } from "@/lib/types"
+import { validateRegistrationNumber } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 
 interface SettingsEnhancedProps {
   onNavigate: (page: string) => void
@@ -11,6 +13,7 @@ interface SettingsEnhancedProps {
 
 export default function SettingsEnhanced({ onNavigate }: SettingsEnhancedProps) {
   const { settings, updateSettings } = useStore()
+  const { toast } = useToast()
   
   const [companyName, setCompanyName] = useState(settings.company.name)
   const [address, setAddress] = useState(settings.company.address)
@@ -23,8 +26,27 @@ export default function SettingsEnhanced({ onNavigate }: SettingsEnhancedProps) 
   const [dueDateReminder, setDueDateReminder] = useState(settings.notifications.dueDateReminder)
   const [paymentConfirmation, setPaymentConfirmation] = useState(settings.notifications.paymentConfirmation)
   const [invoiceCreation, setInvoiceCreation] = useState(settings.notifications.invoiceCreation)
+  const [registrationNumber, setRegistrationNumber] = useState(settings.company.registrationNumber ?? "")
+  const [validationError, setValidationError] = useState<string | undefined>(undefined)
+
+  const handleRegistrationNumberBlur = () => {
+    const validation = validateRegistrationNumber(registrationNumber)
+    setValidationError(validation.error)
+  }
 
   const handleSave = () => {
+    // バリデーション
+    const validation = validateRegistrationNumber(registrationNumber)
+    if (!validation.valid) {
+      toast({
+        title: "入力エラー",
+        description: validation.error,
+        variant: "destructive",
+      })
+      setValidationError(validation.error)
+      return
+    }
+
     const updatedSettings: Settings = {
       company: {
         name: companyName,
@@ -36,6 +58,7 @@ export default function SettingsEnhanced({ onNavigate }: SettingsEnhancedProps) 
         accountType: accountType,
         accountNumber: accountNumber,
         taxRate: settings.company.taxRate,
+        registrationNumber: registrationNumber.trim() || undefined,
       },
       notifications: {
         dueDateReminder: dueDateReminder,
@@ -44,7 +67,10 @@ export default function SettingsEnhanced({ onNavigate }: SettingsEnhancedProps) 
       },
     }
     updateSettings(updatedSettings)
-    alert("設定を保存しました")
+    toast({
+      title: "保存完了",
+      description: "設定を保存しました",
+    })
   }
 
   return (
@@ -101,6 +127,42 @@ export default function SettingsEnhanced({ onNavigate }: SettingsEnhancedProps) 
                   className="w-full px-4 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
+            </div>
+            {/* 登録番号 */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                適格請求書発行事業者登録番号
+                <span className="text-xs text-muted-foreground ml-2">
+                  （任意: T+13桁の数字）
+                </span>
+              </label>
+              <input
+                type="text"
+                id="registrationNumber"
+                placeholder="T1234567890123"
+                value={registrationNumber}
+                onChange={(e) => {
+                  setRegistrationNumber(e.target.value)
+                  setValidationError(undefined)
+                }}
+                onBlur={handleRegistrationNumberBlur}
+                maxLength={14}
+                pattern="^T\d{13}$"
+                aria-label="適格請求書発行事業者登録番号"
+                aria-describedby="regnum-help regnum-error"
+                aria-invalid={validationError ? "true" : "false"}
+                className={`w-full px-4 py-2 border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                  validationError ? "border-red-500" : "border-border"
+                }`}
+              />
+              <p id="regnum-help" className="text-xs text-muted-foreground mt-1">
+                インボイス制度対応。登録番号は請求書PDFに自動印刷されます。
+              </p>
+              {validationError && (
+                <p id="regnum-error" className="text-xs text-red-600 mt-1" role="alert">
+                  {validationError}
+                </p>
+              )}
             </div>
           </div>
         </div>

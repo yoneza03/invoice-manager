@@ -75,6 +75,13 @@ const styles = StyleSheet.create({
     lineHeight: 1.6,
     color: "#6b7280",
   },
+  registrationNumber: {
+    fontSize: 9,
+    color: "#374151",
+    marginTop: 4,
+    marginBottom: 4,
+    fontFamily: "NotoSansJP",
+  },
   table: {
     marginBottom: 20,
   },
@@ -185,6 +192,11 @@ const InvoicePDF = ({ invoice, companyInfo }: { invoice: Invoice; companyInfo: a
           <View style={styles.party}>
             <Text style={styles.partyTitle}>発行者</Text>
             <Text style={styles.partyName}>{companyInfo.name}</Text>
+            {companyInfo.registrationNumber && (
+              <Text style={styles.registrationNumber}>
+                登録番号: {companyInfo.registrationNumber}
+              </Text>
+            )}
             <Text style={styles.partyDetails}>{companyInfo.address}</Text>
             <Text style={styles.partyDetails}>{companyInfo.email}</Text>
             <Text style={styles.partyDetails}>{companyInfo.phone}</Text>

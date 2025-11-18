@@ -179,9 +179,29 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
             <div>
               <p className="text-sm text-muted-foreground mb-2">発行者</p>
               <div>
-                <p className="font-semibold text-foreground">{settings.company.name}</p>
-                <p className="text-sm text-muted-foreground">{settings.company.address}</p>
-                <p className="text-sm text-muted-foreground">{settings.company.email}</p>
+                {/* インポートデータの場合は抽出された発行者情報を表示 */}
+                {(invoice.source === "pdf_import" || invoice.source === "image_import") && invoice.issuerInfo ? (
+                  <>
+                    <p className="font-semibold text-foreground">{invoice.issuerInfo.name}</p>
+                    {invoice.issuerInfo.registrationNumber && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        登録番号: {invoice.issuerInfo.registrationNumber}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  /* 手動作成データの場合はシステム設定の自社情報を表示 */
+                  <>
+                    <p className="font-semibold text-foreground">{settings.company.name}</p>
+                    <p className="text-sm text-muted-foreground">{settings.company.address}</p>
+                    <p className="text-sm text-muted-foreground">{settings.company.email}</p>
+                    {settings.company.registrationNumber && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        登録番号: {settings.company.registrationNumber}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
             <div>

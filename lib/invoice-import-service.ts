@@ -1,4 +1,4 @@
-import { Invoice, InvoiceAttachment, InvoiceSource, OCRResult, Client, InvoiceLineItem } from "./types"
+import { Invoice, InvoiceAttachment, InvoiceSource, OCRResult, Client, InvoiceLineItem, IssuerInfo } from "./types"
 import { ocrProcessor } from "./ocr-processor"
 import { createAttachment, pdfToImage, validateFile } from "./file-processor"
 
@@ -156,6 +156,9 @@ export class InvoiceImportService {
     // すべてのフィールドが未定義の場合はpaymentInfoをundefinedにする
     const hasPaymentInfo = Object.values(paymentInfo).some(value => value !== undefined)
 
+    // 発行者情報の構築（インポート請求書の発行元）
+    const issuerInfo = this.buildIssuerInfo(extractedFields)
+
     return {
       id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       invoiceNumber:
@@ -171,6 +174,7 @@ export class InvoiceImportService {
       total,
       status: "imported",
       paymentInfo: hasPaymentInfo ? paymentInfo : undefined,
+      issuerInfo: issuerInfo,
     }
   }
 
@@ -246,6 +250,25 @@ export class InvoiceImportService {
         amount: subtotal,
       },
     ]
+  }
+
+  /**
+   * OCR結果から発行元情報を構築
+   */
+  private buildIssuerInfo(
+    extractedFields: OCRResult["extractedFields"]
+  ): IssuerInfo | undefined {
+    // 登録番号が抽出されている場合のみIssuerInfoを作成
+    if (!extractedFields.issuerRegistrationNumber) {
+      return undefined
+    }
+
+    const issuerInfo: IssuerInfo = {
+      name: "インポート元企業",
+      registrationNumber: extractedFields.issuerRegistrationNumber.value,
+    }
+
+    return issuerInfo
   }
 }
 
