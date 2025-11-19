@@ -17,6 +17,9 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
   const { toast } = useToast()
   
   const invoice = invoiceId ? invoices.find((inv) => inv.id === invoiceId) : null
+  
+  // デバッグ用ログ
+  console.log('Invoice IssuerInfo:', JSON.stringify(invoice?.issuerInfo, null, 2))
 
   if (!invoice) {
     return (

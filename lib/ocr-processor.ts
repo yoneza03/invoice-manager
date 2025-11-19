@@ -465,19 +465,32 @@ export class OCRProcessor {
    * 例: T1234567890123
    */
   private extractRegistrationNumber(text: string): FieldExtraction | undefined {
-    // パターン1: ラベル付き（最も信頼度が高い）
-    // OCR誤認識対応: 空白が入る可能性を考慮
+    // デバッグログ1: メソッド開始
+    console.log('=== 登録番号抽出開始 ===')
+    console.log('元のテキスト:', text.substring(0, 200))
+    
+    // スペースを全て削除してから検索
+    const normalizedText = text.replace(/\s+/g, '')
+    
+    // デバッグログ2: スペース削除後
+    console.log('スペース削除後:', normalizedText.substring(0, 200))
+    
+    // パターン1: ラベル付き(最も信頼度が高い)
     const labeledPatterns = [
-      /(?:適格請求書発行事業者登録番号|登録\s*番\s*号|登録\s*No\.?|登録\s*ナンバー|Registration\s*Number|Reg\.?\s*No\.?|インボイス番号|Invoice\s*No)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
-      /(?:インボイス|Invoice)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
-      /(?:T番号)[:\s：]*\n?\s*([TtＴ][Il1l]?\s*\d[\s\d]{12,})/i,
+      /(?:適格請求書発行事業者登録番号|登録番号|登録No\.?|登録ナンバー|RegistrationNumber|Reg\.?No\.?|インボイス番号|InvoiceNo)[:\s：]*([TtＴ]\d{13,})/i,
+      /(?:インボイス|Invoice)[:\s：]*([TtＴ]\d{13,})/i,
+      /(?:T番号)[:\s：]*([TtＴ]\d{13,})/i,
     ]
     
     for (const pattern of labeledPatterns) {
-      const match = text.match(pattern)
+      const match = normalizedText.match(pattern)
       if (match) {
-        const value = this.normalizeRegistrationNumber(match[1])
-        // 正規化後に正しいフォーマットかチェック
+        // デバッグログ3: マッチ結果
+        console.log('マッチ結果:', match)
+        
+        // マッチしたら正規化
+        const value = match[1].toUpperCase().replace(/[^T0-9]/g, '')
+        // 正しいフォーマットかチェック(T + 13桁の数字)
         if (/^T\d{13}$/.test(value)) {
           console.log(`登録番号検出(ラベル付き): ${value}`)
           return {
@@ -488,13 +501,14 @@ export class OCRProcessor {
       }
     }
     
-    // パターン2: ラベルなしでT + 13桁を検出（空白混入対応）
-    const unlabeledPattern = /\b([TtＴ][Il1l]?\s*\d[\s\d]{12,})\b/
-    const unlabeledMatch = text.match(unlabeledPattern)
+    // パターン2: ラベルなしでT + 13桁を検出
+    const unlabeledPattern = /\b([TtＴ]\d{13,})\b/
+    const unlabeledMatch = normalizedText.match(unlabeledPattern)
     
     if (unlabeledMatch) {
-      const value = this.normalizeRegistrationNumber(unlabeledMatch[1])
-      // 正規化後に正しいフォーマットかチェック
+      // マッチしたら正規化
+      const value = unlabeledMatch[1].toUpperCase().replace(/[^T0-9]/g, '')
+      // 正しいフォーマットかチェック
       if (/^T\d{13}$/.test(value)) {
         console.log(`登録番号検出(ラベルなし): ${value}`)
         return {
@@ -509,35 +523,11 @@ export class OCRProcessor {
   }
 
   /**
-   * 登録番号の正規化
-   * OCR誤認識を補正
-   */
-  private normalizeRegistrationNumber(value: string): string {
-    // 空白を除去
-    let normalized = value.replace(/\s+/g, '')
-    
-    // 全角文字を半角に変換
-    normalized = normalized.replace(/[Ｔ]/g, 'T')
-    normalized = normalized.replace(/[０-９]/g, (s) =>
-      String.fromCharCode(s.charCodeAt(0) - 0xFEE0)
-    )
-    
-    // 先頭のI, 1, l, t を T に変換（OCR誤認識対策）
-    if (/^[Il1lt]/.test(normalized)) {
-      normalized = 'T' + normalized.substring(1)
-    }
-    
-    // 大文字に統一
-    normalized = normalized.toUpperCase()
-    
-    return normalized
-  }
-
-  /**
    * 発行元企業名の抽出
    *
    * 請求先(御中、様付き)より後に出現する企業名を抽出
    * 「株式会社○○」または「○○株式会社」のパターンに対応
+   * スペースが混入している場合にも対応
    */
   private extractIssuerName(text: string): FieldExtraction | undefined {
     // 請求先(御中、様付き)の位置を特定
@@ -553,16 +543,19 @@ export class OCRProcessor {
       }
     }
     
+    // スペースを全て削除してから検索
+    const normalizedText = searchText.replace(/\s+/g, '')
+    
     // 企業名パターン: 「株式会社○○」または「○○株式会社」
     const companyPatterns = [
-      /株式会社\s*([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９]{2,20})/,
-      /([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９]{2,20})\s*株式会社/,
+      /株式会社([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９]{2,20})/,
+      /([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９]{2,20})株式会社/,
     ]
     
     for (const pattern of companyPatterns) {
-      const match = searchText.match(pattern)
+      const match = normalizedText.match(pattern)
       if (match) {
-        const companyName = match[0].replace(/\s+/g, '').trim()
+        const companyName = match[0]
         if (companyName.length >= 4 && companyName.length <= 30) {
           console.log(`発行元企業名検出: ${companyName}`)
           return {
