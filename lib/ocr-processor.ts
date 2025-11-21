@@ -449,6 +449,18 @@ export class OCRProcessor {
       fields.issuerName = issuerName
     }
 
+    // 🆕 発行元住所の抽出
+    const issuerAddress = this.extractIssuerAddress(text, lines)
+    if (issuerAddress) {
+      fields.issuerAddress = issuerAddress
+    }
+
+    // 🆕 発行元電話番号の抽出
+    const issuerPhone = this.extractIssuerPhone(text)
+    if (issuerPhone) {
+      fields.issuerPhone = issuerPhone
+    }
+
     // 明細行(品名)の抽出
     const lineItems = this.extractLineItems(text, lines, fields)
     if (lineItems.length > 0) {
@@ -571,6 +583,72 @@ export class OCRProcessor {
   }
 
   /**
+   * 発行元住所の抽出
+   */
+  private extractIssuerAddress(text: string, lines: string[]): FieldExtraction | undefined {
+    // スペースを削除
+    const normalizedText = text.replace(/\s+/g, '')
+    
+    // 〒郵便番号から始まる住所を抽出（TELの前まで）
+    const addressWithPostalMark = /〒?\d{3}-?\d{4}([^TEL]+)/
+    const match1 = normalizedText.match(addressWithPostalMark)
+    
+    if (match1) {
+      let address = match1[1] + match1[2]
+      // TELを含む場合は除去
+      address = address.replace(/TEL.*/g, '').trim()
+      console.log(`発行元住所検出: ${address}`)
+      return {
+        value: address,
+        confidence: 0.9,
+      }
+    }
+    // 〒なしで都道府県から始まるパターン
+    const prefecturePattern = /(東京都|北海道|(?:京都|大阪)府|.{2,3}県)[^\nTEL]+/
+    const match2 = normalizedText.match(prefecturePattern)
+    
+    if (match2) {
+      let address = match2[0]
+      address = address.replace(/TEL.*/g, '').trim()
+      console.log(`発行元住所検出: ${address}`)
+      return {
+        value: address,
+        confidence: 0.8,
+      }
+    }
+    console.log('発行元住所は検出されませんでした')
+    return undefined
+  }
+
+  /**
+   * 発行元電話番号の抽出
+   */
+  private extractIssuerPhone(text: string): FieldExtraction | undefined {
+    const clientMatch = text.match(/([^\n]+?)(?:様|御中|宛)/)
+    let searchText = text
+    if (clientMatch) {
+      const idx = text.indexOf(clientMatch[0])
+      if (idx !== -1) searchText = text.substring(idx + clientMatch[0].length)
+    }
+
+    const phonePatterns = [
+      /(?:TEL|Tel|電話)[:\s：]*(\d{2,4}[-−ー]\d{2,4}[-−ー]\d{4})/,
+      /(\d{2,4}[-−ー]\d{2,4}[-−ー]\d{4})/,
+    ]
+
+    for (const pattern of phonePatterns) {
+      const match = searchText.match(pattern)
+      if (match) {
+        return {
+          value: match[1].replace(/[−ー]/g, '-'),
+          confidence: 0.8,
+        }
+      }
+    }
+    return undefined
+  }
+
+  /**
    * 表形式の明細行を抽出
    */
   private extractLineItems(
@@ -611,32 +689,49 @@ export class OCRProcessor {
     })
     console.log('==================')
 
+    console.log('=== 表ヘッダー検出開始 ===')
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
+      const trimmedLine = line.trim()
+      
+      // 空行はスキップ
+      if (!trimmedLine) continue
+      
+      // 除外条件1: 「合計」「小計」「税」で始まる行はヘッダーから除外
+      if (/^(?:合計|小計|消費税|税額|総額|御請求額|税|Total|Subtotal|Tax)/i.test(trimmedLine)) {
+        console.log(`ヘッダー候補除外(合計/小計行): ${i}, "${trimmedLine}"`)
+        continue
+      }
+      
+      // 除外条件2: 「件名:」は除外（これは請求書の件名フィールド）
+      if (/件\s*名\s*:/.test(trimmedLine)) {
+        console.log(`ヘッダー候補除外(件名フィールド): ${i}, "${trimmedLine}"`)
+        continue
+      }
       
       // 表ヘッダー行の検出
       // パターン1: 「品名/摘要」「数量」「単価」「金額」などが揃っている行
       // OCR誤認識にも対応（「摘要」→「机衣」など）
-      const hasItemName = /品\s*名|摘\s*要|商\s*品|品\s*目|科\s*提|下る|机\s*衣|内\s*容|項\s*目/.test(line)
-      const hasQuantity = /数\s*量|個\s*数|放\s*量|施\s*還/.test(line)
-      const hasAmount = /金\s*額|合\s*計|単\s*価/.test(line)
+      const hasItemName = /品\s*名|摘\s*要|商\s*品|品\s*目|科\s*提|下る|机\s*衣|内\s*容|項\s*目/.test(trimmedLine)
+      const hasQuantity = /数\s*量|個\s*数|放\s*量|施\s*還/.test(trimmedLine)
+      const hasAmount = /金\s*額|単\s*価/.test(trimmedLine)  // 「合計」を削除
       
       // パターン2: パイプ区切りの表形式を検出（OCR誤認識でも検出可能）
-      const isPipeTable = /\|/.test(line) && line.split('|').length >= 4
+      const isPipeTable = /\|/.test(trimmedLine) && trimmedLine.split('|').length >= 4
+      
+      console.log(`ヘッダー候補行: ${i}, "${trimmedLine}" (品名:${hasItemName}, 数量:${hasQuantity}, 金額:${hasAmount}, パイプ:${isPipeTable})`)
       
       // 3つの要素がある、またはパイプ区切りで4列以上ある場合は表ヘッダーと判断
-      if ((hasItemName && hasQuantity && hasAmount) || (isPipeTable && (hasItemName || hasQuantity || hasAmount))) {
+      if ((hasItemName && hasQuantity && hasAmount) || (isPipeTable && trimmedLine.split('|').length >= 3)){
         headerLineIndex = i
-        console.log(`表ヘッダー検出: "${line}"`)
+        console.log(`表ヘッダー検出: "${trimmedLine}"`)
         break
       }
-      
-      // パターン3: 「件名:」は除外（これは請求書の件名フィールド）
-      if (/件\s*名\s*:/.test(line)) {
-        console.log(`スキップ(件名フィールド): "${line}"`)
-        continue
-      }
     }
+    
+    console.log(`最終的なヘッダー行: ${headerLineIndex}`)
+    console.log('=== 表ヘッダー検出終了 ===')
 
     // ヘッダー行が見つからない場合は終了
     if (headerLineIndex === -1) {
@@ -745,70 +840,104 @@ export class OCRProcessor {
       amount?: FieldExtraction
     }>
   ): void {
-    // 品名を抽出（正規化後のテキスト対応）
-    // 例: "Web 制作 (9 364,540 \364,540月 分 )"
+    console.log(`=== processLineItem 開始 ===`)
+    console.log(`入力行: "${line}"`)
+    
+    // スペースを正規化してから処理
+    const normalizedLine = line.replace(/\s+/g, ' ').trim()
+    console.log(`正規化後: "${normalizedLine}"`)
+    
+    // 品名を抽出
     let description = ''
     
-    // 大きな数値（3桁以上の連続した数字、またはカンマ/バックスラッシュ付き）のみを除去
-    // 1〜2桁の数値（月の数字など）は保持
-    const withoutNumbers = line
-      .replace(/\s*\\\d{3,}[,，]?\d*\s*/g, ' ')  // バックスラッシュ付き数値
-      .replace(/\s+\d{3,}\s*/g, ' ')  // 3桁以上の連続数値（空白で区切られている）
-      .replace(/\s*[\d,，]{5,}\s*/g, ' ')  // カンマ区切りの大きな数値
+    // ステップ1: カンマ区切り数値を除去（バックスラッシュ付きも含む）
+    // 例: "364,540" や "\364,540" を除去
+    let cleanedLine = normalizedLine
+      .replace(/\\?\d{1,3}(?:[,，]\d{3})+/g, '')  // カンマ区切り数値
+      .replace(/\\?\d{4,}/g, '')  // 4桁以上の連続数値
+      .replace(/\s+/g, ' ')
       .trim()
     
-    // 品名パターン: 日本語、英字、括弧を含む文字列
-    const descriptionPattern = /^([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９\s（）()【】・ー\-\/\u3000]+)/
-    const descMatch = withoutNumbers.match(descriptionPattern)
+    console.log(`数値除去後: "${cleanedLine}"`)
+    
+    // ステップ2: 品名パターンでマッチング
+    // 「Web 制作 (9月 分 )」のような形式に対応
+    // 日本語、英字、括弧、1-2桁の数字（月など）を含む文字列
+    const descriptionPattern = /^([ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９\s（）()【】・ー\-\/]+)/
+    const descMatch = cleanedLine.match(descriptionPattern)
     
     if (descMatch) {
-      description = descMatch[1].trim()
-    } else {
-      // フォールバック: 最初の非数値部分
-      const simplePattern = /^([^0-9\\]+)/
-      const simpleMatch = line.match(simplePattern)
-      if (simpleMatch) {
-        description = simpleMatch[1].trim()
+      description = descMatch[1].replace(/\s+/g, ' ').trim()
+      // 末尾の不要な括弧を整理
+      description = description.replace(/\(\s*\)|\（\s*\）/g, '').trim()
+    }
+    
+    // フォールバック: より緩いパターンで抽出
+    if (!description || description.length < 2) {
+      // 日本語または英字で始まる部分を抽出
+      const fallbackPattern = /^([ぁ-んァ-ヶー一-龠a-zA-Z][ぁ-んァ-ヶー一-龠a-zA-Z0-9０-９\s（）()【】・ー\-\/\u3000]*)/
+      const fallbackMatch = cleanedLine.match(fallbackPattern)
+      if (fallbackMatch) {
+        description = fallbackMatch[1].replace(/\s+/g, ' ').trim()
       }
     }
+    
+    // さらにフォールバック: 元の行から最初の非数値部分を抽出
+    if (!description || description.length < 2) {
+      const simplePattern = /^([^0-9\\¥￥]+)/
+      const simpleMatch = normalizedLine.match(simplePattern)
+      if (simpleMatch) {
+        description = simpleMatch[1].replace(/\s+/g, ' ').trim()
+      }
+    }
+    
+    console.log(`抽出された品名: "${description}"`)
 
     // 品名が妥当かチェック(2文字以上、100文字以下)
     if (description.length >= 2 && description.length <= 100) {
       // 数量の抽出
-      const quantityMatch = line.match(/(?:10%|8%|\d+%)\s+(\d+)/)
+      const quantityMatch = normalizedLine.match(/(?:10%|8%|\d+%)\s+(\d+)/)
       
-      // 単価・金額の抽出（正規化後のカンマ区切り数値とバックスラッシュ付き数値）
-      // パターン1: カンマ区切り数値（5桁以上）
-      const commaNumbers = line.match(/[\d,，]{5,}/g)
-      // パターン2: 3桁以上の連続数値
-      const largeNumbers = line.match(/\b\d{3,}\b/g)
-      // パターン3: バックスラッシュ付き数値
-      const backslashNumbers = line.match(/\\(\d+)/g)
+      // 単価・金額の抽出（元の正規化された行から）
+      // パターン1: カンマ区切り数値
+      const commaNumbers = normalizedLine.match(/\\?\d{1,3}(?:[,，]\d{3})+/g)
+      // パターン2: 4桁以上の連続数値
+      const largeNumbers = normalizedLine.match(/\\?\d{4,}/g)
       
       let unitPrice: string | undefined
       let amount: string | undefined
       
-      if (commaNumbers && commaNumbers.length > 0) {
-        // カンマ区切り数値がある場合
-        const firstPrice = commaNumbers[0].replace(/[,，]/g, '')
-        const lastPrice = commaNumbers[commaNumbers.length - 1].replace(/[,，]/g, '')
-        
-        unitPrice = firstPrice
-        amount = lastPrice
-      } else if (largeNumbers && largeNumbers.length > 0) {
-        // 3桁以上の数値がある場合
-        const firstPrice = largeNumbers[0]
-        const lastPrice = largeNumbers[largeNumbers.length - 1]
-        
-        unitPrice = firstPrice
-        amount = lastPrice
-      } else if (backslashNumbers && backslashNumbers.length > 0) {
-        // バックスラッシュ付き数値のみの場合
-        const firstPrice = backslashNumbers[0].replace(/\\/g, '')
-        const lastPrice = backslashNumbers[backslashNumbers.length - 1].replace(/\\/g, '')
-        
-        unitPrice = firstPrice
-        amount = lastPrice
+      // 金額の抽出（優先度: カンマ区切り > 連続数値）
+      const allNumbers: string[] = []
+      
+      if (commaNumbers) {
+        commaNumbers.forEach(n => {
+          const cleaned = n.replace(/[\\,，]/g, '')
+          if (cleaned.length >= 3) {
+            allNumbers.push(cleaned)
+          }
+        })
+      }
+      
+      if (largeNumbers) {
+        largeNumbers.forEach(n => {
+          const cleaned = n.replace(/\\/g, '')
+          // 既に追加されていない場合のみ追加
+          if (!allNumbers.includes(cleaned)) {
+            allNumbers.push(cleaned)
+          }
+        })
+      }
+      
+      console.log(`抽出された数値: ${JSON.stringify(allNumbers)}`)
+      
+      if (allNumbers.length >= 2) {
+        // 2つ以上の数値がある場合、最初を単価、最後を金額とする
+        unitPrice = allNumbers[0]
+        amount = allNumbers[allNumbers.length - 1]
+      } else if (allNumbers.length === 1) {
+        // 1つの数値のみの場合は金額とする
+        amount = allNumbers[0]
       }
 
       console.log(`品名: "${description}", 単価: ${unitPrice}, 金額: ${amount}`)
@@ -831,7 +960,11 @@ export class OCRProcessor {
           confidence: 0.7,
         } : undefined,
       })
+    } else {
+      console.log(`品名が不正(長さ: ${description.length}): スキップ`)
     }
+    
+    console.log(`=== processLineItem 終了 ===`)
   }
 
   /**

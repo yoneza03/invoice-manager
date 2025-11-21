@@ -356,6 +356,23 @@ export default function InvoiceImport() {
                       </p>
                     </div>
 
+                    {/* 🆕 発行者情報セクション */}
+                    {selectedFile.result.invoice.issuerInfo && (
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <h3 className="text-sm font-semibold text-blue-800 mb-2">発行者情報（OCR抽出）</h3>
+                        <p className="text-sm">{selectedFile.result.invoice.issuerInfo.name}</p>
+                        {selectedFile.result.invoice.issuerInfo.address && (
+                          <p className="text-xs text-muted-foreground">{selectedFile.result.invoice.issuerInfo.address}</p>
+                        )}
+                        {selectedFile.result.invoice.issuerInfo.phone && (
+                          <p className="text-xs text-muted-foreground">TEL: {selectedFile.result.invoice.issuerInfo.phone}</p>
+                        )}
+                        {selectedFile.result.invoice.issuerInfo.registrationNumber && (
+                          <p className="text-xs text-muted-foreground">登録番号: {selectedFile.result.invoice.issuerInfo.registrationNumber}</p>
+                        )}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => confirmImport(selectedFile)}
                       className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"

@@ -265,6 +265,8 @@ export class InvoiceImportService {
 
     const issuerInfo: IssuerInfo = {
       name: extractedFields.issuerName?.value || "インポート元企業",
+      address: extractedFields.issuerAddress?.value,
+      phone: extractedFields.issuerPhone?.value,
       registrationNumber: extractedFields.issuerRegistrationNumber?.value,
     }
 

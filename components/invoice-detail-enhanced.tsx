@@ -186,6 +186,12 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
                 {(invoice.source === "pdf_import" || invoice.source === "image_import") && invoice.issuerInfo ? (
                   <>
                     <p className="font-semibold text-foreground">{invoice.issuerInfo.name}</p>
+                    {invoice.issuerInfo.address && (
+                      <p className="text-sm text-muted-foreground">{invoice.issuerInfo.address}</p>
+                    )}
+                    {invoice.issuerInfo.phone && (
+                      <p className="text-sm text-muted-foreground">{invoice.issuerInfo.phone}</p>
+                    )}
                     {invoice.issuerInfo.registrationNumber && (
                       <p className="text-sm text-muted-foreground mt-1">
                         登録番号: {invoice.issuerInfo.registrationNumber}

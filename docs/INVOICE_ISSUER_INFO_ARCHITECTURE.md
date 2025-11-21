@@ -1295,6 +1295,193 @@ interface IssuerMaster {
 
 ---
 
-**作成者**: AI Architect  
-**レビュー状態**: 承認待ち  
+## 🔧 住所・電話番号追加実装方針（追記: 2025-11-21）
+
+### 現状分析
+
+| 項目 | types.ts | ocr-processor.ts | invoice-import.tsx |
+|------|----------|------------------|-------------------|
+| issuerName | ✅ 定義済み | ✅ 抽出実装済み | ❌ 表示なし |
+| issuerRegistrationNumber | ✅ 定義済み | ✅ 抽出実装済み | ❌ 表示なし |
+| issuerAddress | ✅ IssuerInfoに定義済み | ❌ **未実装** | ❌ 表示なし |
+| issuerPhone | ✅ IssuerInfoに定義済み | ❌ **未実装** | ❌ 表示なし |
+
+### 実装タスク
+
+#### Phase 1: OCR抽出の追加（lib/ocr-processor.ts）
+
+**1.1 OCRResult.extractedFields の拡張**
+
+[`lib/types.ts:70`](lib/types.ts:70) に以下を追加:
+
+```typescript
+extractedFields: {
+  // 既存フィールド...
+  issuerAddress?: FieldExtraction    // 🆕 追加
+  issuerPostalCode?: FieldExtraction // 🆕 追加
+  issuerPhone?: FieldExtraction      // 🆕 追加
+}
+```
+
+**1.2 発行元住所抽出メソッドの実装**
+
+[`lib/ocr-processor.ts`](lib/ocr-processor.ts:571) の `extractIssuerName()` の後に追加:
+
+```typescript
+/**
+ * 発行元住所の抽出
+ * - 請求先（様/御中）より後のテキストから抽出
+ * - 郵便番号パターン（〒xxx-xxxx）を検出
+ * - 都道府県名から始まる行を検出
+ */
+private extractIssuerAddress(text: string): {
+  address?: FieldExtraction
+  postalCode?: FieldExtraction
+} {
+  // 請求先より後のテキストを対象
+  const clientMatch = text.match(/([^\n]+?)(?:様|御中|宛)/)
+  let searchText = text
+  if (clientMatch) {
+    const idx = text.indexOf(clientMatch[0])
+    if (idx !== -1) searchText = text.substring(idx + clientMatch[0].length)
+  }
+
+  const result: { address?: FieldExtraction; postalCode?: FieldExtraction } = {}
+
+  // 郵便番号パターン
+  const postalMatch = searchText.match(/〒?\s*(\d{3}[-−ー]\d{4})/)
+  if (postalMatch) {
+    result.postalCode = {
+      value: postalMatch[1].replace(/[−ー]/g, '-'),
+      confidence: 0.85,
+    }
+  }
+
+  // 都道府県パターン
+  const prefectures = ['東京都','北海道','大阪府','京都府',
+    '青森県','岩手県','宮城県','秋田県','山形県','福島県',
+    '茨城県','栃木県','群馬県','埼玉県','千葉県','神奈川県',
+    '新潟県','富山県','石川県','福井県','山梨県','長野県',
+    '岐阜県','静岡県','愛知県','三重県','滋賀県','兵庫県',
+    '奈良県','和歌山県','鳥取県','島根県','岡山県','広島県',
+    '山口県','徳島県','香川県','愛媛県','高知県','福岡県',
+    '佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県']
+  
+  const lines = searchText.split('\n')
+  for (const line of lines) {
+    if (/[様御中宛]/.test(line)) continue
+    for (const pref of prefectures) {
+      if (line.includes(pref)) {
+        result.address = { value: line.trim(), confidence: 0.75 }
+        break
+      }
+    }
+    if (result.address) break
+  }
+
+  return result
+}
+```
+
+**1.3 発行元電話番号抽出メソッドの実装**
+
+```typescript
+/**
+ * 発行元電話番号の抽出
+ */
+private extractIssuerPhone(text: string): FieldExtraction | undefined {
+  const clientMatch = text.match(/([^\n]+?)(?:様|御中|宛)/)
+  let searchText = text
+  if (clientMatch) {
+    const idx = text.indexOf(clientMatch[0])
+    if (idx !== -1) searchText = text.substring(idx + clientMatch[0].length)
+  }
+
+  const phonePatterns = [
+    /(?:TEL|Tel|電話)[:\s：]*(\d{2,4}[-−ー]\d{2,4}[-−ー]\d{4})/,
+    /(\d{2,4}[-−ー]\d{2,4}[-−ー]\d{4})/,
+  ]
+
+  for (const pattern of phonePatterns) {
+    const match = searchText.match(pattern)
+    if (match) {
+      return {
+        value: match[1].replace(/[−ー]/g, '-'),
+        confidence: 0.8,
+      }
+    }
+  }
+  return undefined
+}
+```
+
+**1.4 parseInvoiceFields での呼び出し追加**
+
+[`lib/ocr-processor.ts:446-450`](lib/ocr-processor.ts:446) の後に追加:
+
+```typescript
+// 🆕 発行元住所の抽出
+const issuerAddressInfo = this.extractIssuerAddress(text)
+if (issuerAddressInfo.address) {
+  fields.issuerAddress = issuerAddressInfo.address
+}
+if (issuerAddressInfo.postalCode) {
+  fields.issuerPostalCode = issuerAddressInfo.postalCode
+}
+
+// 🆕 発行元電話番号の抽出
+const issuerPhone = this.extractIssuerPhone(text)
+if (issuerPhone) {
+  fields.issuerPhone = issuerPhone
+}
+```
+
+#### Phase 2: インポートサービスの更新（lib/invoice-import-service.ts）
+
+`buildIssuerInfo()` で新フィールドを設定:
+
+```typescript
+const issuerInfo: IssuerInfo = {
+  name: extractedFields.issuerName.value,
+  address: extractedFields.issuerAddress?.value,      // 🆕
+  phone: extractedFields.issuerPhone?.value,          // 🆕
+  registrationNumber: extractedFields.issuerRegistrationNumber?.value,
+}
+```
+
+#### Phase 3: UI表示の追加（components/invoice-import.tsx）
+
+[`components/invoice-import.tsx:253-365`](components/invoice-import.tsx:253) のOCR結果表示部分に発行者情報セクションを追加:
+
+```tsx
+{/* 🆕 発行者情報セクション */}
+{selectedFile.result.invoice.issuerInfo && (
+  <div className="bg-blue-50 p-4 rounded-lg mb-4">
+    <h3 className="text-sm font-semibold text-blue-800 mb-2">発行者情報（OCR抽出）</h3>
+    <p className="text-sm">{selectedFile.result.invoice.issuerInfo.name}</p>
+    {selectedFile.result.invoice.issuerInfo.address && (
+      <p className="text-xs text-muted-foreground">{selectedFile.result.invoice.issuerInfo.address}</p>
+    )}
+    {selectedFile.result.invoice.issuerInfo.phone && (
+      <p className="text-xs text-muted-foreground">TEL: {selectedFile.result.invoice.issuerInfo.phone}</p>
+    )}
+    {selectedFile.result.invoice.issuerInfo.registrationNumber && (
+      <p className="text-xs text-muted-foreground">登録番号: {selectedFile.result.invoice.issuerInfo.registrationNumber}</p>
+    )}
+  </div>
+)}
+```
+
+### 実装優先度
+
+1. **高**: `extractIssuerAddress()` - 住所は請求書で重要
+2. **高**: `extractIssuerPhone()` - 連絡先として必要
+3. **中**: UI表示の追加 - 抽出結果の確認用
+4. **低**: 住所・電話番号の編集機能
+
+---
+
+**作成者**: AI Architect
+**レビュー状態**: 承認待ち
+**更新日**: 2025-11-21
 **次のアクション**: ユーザー承認後、Codeモードで実装開始
