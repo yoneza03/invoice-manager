@@ -51,6 +51,7 @@ export interface Invoice {
   isReadonly?: boolean
   originalPdfAttachmentId?: string
   issuerInfo?: IssuerInfo  // 🆕 発行元情報（インポート請求書用）
+  pdfStorageLocation?: 'none' | 'indexeddb'  // 🆕 PDFデータの保存場所
 }
 
 // 添付ファイル
@@ -59,7 +60,6 @@ export interface InvoiceAttachment {
   fileName: string
   fileType: string
   fileSize: number
-  base64Data: string
   uploadedAt: Date
 }
 
@@ -186,4 +186,513 @@ export interface DashboardStats {
 export function validateRegistrationNumber(value: string): boolean {
   const regex = /^T\d{13}$/
   return regex.test(value)
+}
+// ========================================
+// 請求書データ型定義 v2.0.0
+// ========================================
+
+/**
+ * 請求書基本情報
+ * 
+ * 請求書を一意に識別し、取引の時系列を管理するための情報。
+ * インボイス制度対応のため、通貨フィールドも含む。
+ */
+export interface InvoiceBasicInfo {
+  /**
+   * 請求書番号
+   * 形式は発行元により異なる（例: "INV-2023-001", "202311-123"）
+   * null の場合はシステムが自動採番
+   */
+  invoiceNumber: string | null
+
+  /**
+   * 発行日
+   * ISO 8601形式の日付文字列（例: "2023-11-15"）
+   * null の場合は未確定（下書き状態）
+   */
+  issueDate: string | null
+
+  /**
+   * 取引日
+   * 実際の商品・サービス提供日
+   * null の場合は発行日と同一とみなす
+   */
+  transactionDate: string | null
+
+  /**
+   * 通貨コード
+   * ISO 4217形式（例: "JPY", "USD", "EUR"）
+   * @default "JPY"
+   */
+  currency: string
+
+  /**
+   * 件名・タイトル
+   * 請求書の概要（例: "2023年11月分請求書", "システム開発費用"）
+   */
+  subject: string | null
+
+  /**
+   * 発注番号・注文番号
+   * 照合用の参照番号
+   */
+  orderNumber: string | null
+}
+
+/**
+ * 請求先情報
+ * 
+ * 請求書の宛先。既存の Client 型と連携するが、
+ * より軽量な構造で請求書データに埋め込む。
+ */
+export interface BillingTo {
+  /**
+   * 請求先企業名・個人名（必須）
+   */
+  companyName: string
+
+  /**
+   * 部署名
+   * 例: "経理部", "総務課"
+   */
+  department: string | null
+
+  /**
+   * 担当者名
+   * 例: "山田太郎様", "田中花子 御中"
+   */
+  contactPerson: string | null
+}
+
+/**
+ * 税額内訳
+ * 複数税率対応のための詳細情報
+ */
+export interface TaxBreakdown {
+  /**
+   * 税率（%）
+   * 例: 10, 8, 0
+   */
+  rate: number
+
+  /**
+   * その税率での税額
+   */
+  amount: number
+
+  /**
+   * その税率が適用される課税対象額（オプション）
+   */
+  taxableAmount?: number
+}
+
+/**
+ * 金額情報
+ * 
+ * 請求書の金額計算結果。
+ * 小計、税額、合計の3つの基本値と、詳細な税額内訳を保持。
+ */
+export interface AmountInfo {
+  /**
+   * 小計（税抜金額）
+   */
+  subtotal: number
+
+  /**
+   * 消費税額
+   */
+  taxAmount: number
+
+  /**
+   * 合計金額（税込）
+   * subtotal + taxAmount と一致する必要がある
+   */
+  totalAmount: number
+
+  /**
+   * 税額内訳（複数税率対応）
+   * 例: [{ rate: 10, amount: 1000 }, { rate: 8, amount: 80 }]
+   */
+  taxBreakdown: TaxBreakdown[]
+
+  /**
+   * 免税取引フラグ
+   * true の場合、taxAmount は 0 である必要がある
+   */
+  taxExempt: boolean
+}
+
+/**
+ * 明細行
+ * 
+ * 請求書の個別項目。
+ * 既存の InvoiceLineItem を拡張し、税率・税額を追加。
+ */
+export interface LineItem {
+  /**
+   * 明細ID
+   * システム内で一意に識別するための ID
+   */
+  id: string
+
+  /**
+   * 品名・サービス名（必須）
+   * 例: "Webサイト制作", "SNS運用(10月分)"
+   */
+  description: string
+
+  /**
+   * 数量
+   * null の場合は「一式」として扱う
+   */
+  quantity: number | null
+
+  /**
+   * 単位
+   * 例: "個", "時間", "式", "月"
+   */
+  unit: string | null
+
+  /**
+   * 単価
+   * null の場合は amount のみで計算
+   */
+  unitPrice: number | null
+
+  /**
+   * 金額（税抜）
+   * quantity * unitPrice と一致する必要がある
+   * （quantity または unitPrice が null の場合は直接設定）
+   */
+  amount: number
+
+  /**
+   * 適用税率（%）
+   * 例: 10, 8, 0
+   * null の場合はデフォルト税率を適用
+   */
+  taxRate: number | null
+
+  /**
+   * 税額
+   * amount * (taxRate / 100) と一致する必要がある
+   */
+  taxAmount: number | null
+
+  /**
+   * 備考
+   * この明細行に関する追加情報
+   */
+  remarks: string | null
+}
+
+/**
+ * 支払条件
+ * 
+ * 支払期限と振込先口座情報。
+ * 既存の PaymentInfo を拡張し、支払条件も含める。
+ */
+export interface PaymentTerms {
+  /**
+   * 支払期日
+   * ISO 8601形式の日付文字列（例: "2023-12-31"）
+   */
+  dueDate: string | null
+
+  /**
+   * 支払条件
+   * 例: "翌月末払い", "NET30", "現金払い"
+   */
+  paymentCondition: string | null
+
+  /**
+   * 銀行名
+   * 例: "三菱UFJ銀行"
+   */
+  bankName: string | null
+
+  /**
+   * 支店名
+   * 例: "渋谷支店"
+   */
+  branchName: string | null
+
+  /**
+   * 口座種別
+   * 例: "普通預金", "当座預金"
+   */
+  accountType: string | null
+
+  /**
+   * 口座番号
+   * 例: "1234567"
+   */
+  accountNumber: string | null
+
+  /**
+   * 口座名義
+   * 例: "カ)サンプルカイシャ"
+   */
+  accountHolder: string | null
+
+  /**
+   * 振込手数料負担
+   * 例: "振込手数料は貴社負担でお願いします"
+   */
+  feeBearer: string | null
+}
+
+/**
+ * 請求期間
+ */
+export interface BillingPeriod {
+  /**
+   * 期間開始日
+   * ISO 8601形式（例: "2023-11-01"）
+   */
+  start: string | null
+
+  /**
+   * 期間終了日
+   * ISO 8601形式（例: "2023-11-30"）
+   */
+  end: string | null
+}
+
+/**
+ * 照合キー
+ * 
+ * 請求書の重複チェックと自動マッチングのための情報。
+ * 同一の請求書を複数回インポートした場合の検出や、
+ * 発注書との突合に使用。
+ */
+export interface ReconciliationKeys {
+  /**
+   * 正規化された発行元名
+   * 
+   * 株式会社、スペース等を除去した標準形式。
+   * 例: "サンプル" ← "株式会社サンプル", "サンプル　株式会社"
+   */
+  normalizedIssuerName: string
+
+  /**
+   * 発注番号・注文番号
+   * InvoiceBasicInfo.orderNumber と同じ値
+   */
+  orderNumber: string | null
+
+  /**
+   * 請求期間
+   * 例: { start: "2023-11-01", end: "2023-11-30" }
+   */
+  billingPeriod: BillingPeriod
+
+  /**
+   * 合計金額
+   * 照合時の金額チェック用
+   */
+  totalAmount: number
+
+  /**
+   * プロジェクト名・案件名
+   * OCRまたは手動で設定
+   */
+  projectName: string | null
+
+  /**
+   * 担当者名
+   * 発行元側の担当者
+   */
+  contactPerson: string | null
+}
+
+/**
+ * 受領方法
+ */
+export type ReceiptMethod = 'email' | 'upload'
+
+/**
+ * 請求書メタデータ
+ * 
+ * システム管理用の情報。
+ * 監査証跡、データの出所、ファイル管理に関する情報を保持。
+ */
+export interface InvoiceMetadata {
+  /**
+   * 受領方法
+   * - email: メール経由で受領
+   * - upload: 手動アップロード
+   */
+  receiptMethod: ReceiptMethod
+
+  /**
+   * データソース
+   * - manual: 手動作成
+   * - pdf_import: PDFインポート
+   * - image_import: 画像インポート
+   */
+  source: InvoiceSource
+
+  /**
+   * 受領日時
+   * ISO 8601形式（例: "2023-11-15T10:30:00+09:00"）
+   */
+  receiptDateTime: string
+
+  /**
+   * 登録者
+   * ユーザー識別子またはメールアドレス
+   */
+  registeredBy: string
+
+  /**
+   * 送信元メールアドレス
+   * receiptMethod が 'email' の場合のみ設定
+   */
+  sourceEmail: string | null
+
+  /**
+   * ファイルハッシュ値
+   * 元ファイルのSHA-256ハッシュ（重複検出用）
+   */
+  fileHash: string
+
+  /**
+   * ストレージパス
+   * IndexedDB または LocalStorage のキー
+   */
+  storagePath: string
+
+  /**
+   * OCR信頼度
+   * 0-1の範囲（インポートデータの場合のみ）
+   */
+  ocrConfidence: number
+
+  /**
+   * データバージョン
+   * スキーマのバージョン番号
+   * @default 2
+   */
+  version: number
+
+  /**
+   * 作成日時
+   * ISO 8601形式
+   */
+  createdAt: string
+
+  /**
+   * 更新日時
+   * ISO 8601形式
+   */
+  updatedAt: string
+
+  /**
+   * 読み取り専用フラグ
+   * true の場合、編集不可（インポートデータ）
+   */
+  isReadonly: boolean
+
+  /**
+   * PDFストレージの場所
+   * - 'indexeddb': IndexedDBに保存
+   * - 'none': 保存なし
+   */
+  pdfStorageLocation?: 'indexeddb' | 'none'
+
+  /**
+   * 元のPDF添付ファイルID
+   * InvoiceAttachment の id への参照
+   */
+  originalPdfAttachmentId?: string
+
+  /**
+   * 請求書ステータス
+   */
+  status: InvoiceStatus
+
+  /**
+   * 支払日
+   * status が 'paid' の場合のみ設定
+   */
+  paidDate?: string
+
+  /**
+   * 備考・メモ
+   */
+  notes?: string
+
+  /**
+   * Client型へのID参照
+   * BillingTo と紐づく Client レコードの ID
+   */
+  clientId?: string
+}
+
+/**
+ * 請求書データ（統合型）
+ * 
+ * 8つのカテゴリーで構成される包括的な請求書データモデル。
+ * 既存の Invoice 型を置き換える新しい型定義。
+ * 
+ * @version 2.0.0
+ */
+export interface InvoiceData {
+  /**
+   * システム内部ID
+   * UUID v4 形式
+   */
+  id: string
+
+  /**
+   * 基本情報
+   */
+  basicInfo: InvoiceBasicInfo
+
+  /**
+   * 発行元情報（インポートデータの場合のみ）
+   * 手動作成の場合は undefined で、settings.company を使用
+   */
+  issuerInfo?: IssuerInfo
+
+  /**
+   * 請求先情報
+   */
+  billingTo: BillingTo
+
+  /**
+   * 金額情報
+   */
+  amountInfo: AmountInfo
+
+  /**
+   * 明細行
+   */
+  lineItems: LineItem[]
+
+  /**
+   * 支払条件
+   */
+  paymentTerms: PaymentTerms
+
+  /**
+   * 照合キー
+   */
+  reconciliationKeys: ReconciliationKeys
+
+  /**
+   * メタデータ
+   */
+  metadata: InvoiceMetadata
+
+  /**
+   * 添付ファイル
+   */
+  attachments?: InvoiceAttachment[]
+
+  /**
+   * OCR抽出結果（インポートデータの場合のみ）
+   */
+  ocrData?: OCRResult
 }

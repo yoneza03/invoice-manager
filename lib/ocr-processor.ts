@@ -159,13 +159,9 @@ export class OCRProcessor {
     }
 
     // 顧客名を抽出（"宛" "様" "御中" などのキーワード付近）
-    const clientPattern = /([^\n]+?)(?:様|御中|宛)/
-    const clientMatch = text.match(clientPattern)
-    if (clientMatch) {
-      fields.clientName = {
-        value: clientMatch[1].trim(),
-        confidence: 0.8,
-      }
+    const clientName = this.extractClient(text, lines)
+    if (clientName) {
+      fields.clientName = clientName
     }
 
     // 日付を抽出
@@ -479,58 +475,136 @@ export class OCRProcessor {
   private extractRegistrationNumber(text: string): FieldExtraction | undefined {
     // デバッグログ1: メソッド開始
     console.log('=== 登録番号抽出開始 ===')
-    console.log('元のテキスト:', text.substring(0, 200))
+    console.log('元のテキスト(最初の500文字):', text.substring(0, 500))
+    console.log('元のテキスト長:', text.length)
     
     // スペースを全て削除してから検索
     const normalizedText = text.replace(/\s+/g, '')
     
     // デバッグログ2: スペース削除後
-    console.log('スペース削除後:', normalizedText.substring(0, 200))
+    console.log('スペース削除後(最初の500文字):', normalizedText.substring(0, 500))
+    
+    // 「登録番号」というキーワードが含まれているかチェック
+    const hasRegistrationKeyword = /登録|番号|Registration|Reg/i.test(normalizedText)
+    console.log('登録番号キーワードの存在:', hasRegistrationKeyword)
     
     // パターン1: ラベル付き(最も信頼度が高い)
     const labeledPatterns = [
-      /(?:適格請求書発行事業者登録番号|登録番号|登録No\.?|登録ナンバー|RegistrationNumber|Reg\.?No\.?|インボイス番号|InvoiceNo)[:\s：]*([TtＴ]\d{13,})/i,
-      /(?:インボイス|Invoice)[:\s：]*([TtＴ]\d{13,})/i,
-      /(?:T番号)[:\s：]*([TtＴ]\d{13,})/i,
+      /(?:適格請求書発行事業者登録番号|登録番号|登録No\.?|登録ナンバー|RegistrationNumber|Reg\.?No\.?|インボイス番号|InvoiceNo)[:\s：]*([TtＴイ1lLI『｢「]?[\d０-９]{13,})/i,
+      /(?:インボイス|Invoice)[:\s：]*([TtＴイ1lLI『｢「]?[\d０-９]{13,})/i,
+      /(?:T番号)[:\s：]*([TtＴイ1lLI『｢「]?[\d０-９]{13,})/i,
     ]
     
-    for (const pattern of labeledPatterns) {
+    console.log('=== ラベル付きパターンでのマッチング開始 ===')
+    for (let i = 0; i < labeledPatterns.length; i++) {
+      const pattern = labeledPatterns[i]
+      console.log(`パターン${i + 1}を試行:`, pattern.source)
+      
       const match = normalizedText.match(pattern)
+      console.log(`パターン${i + 1}のマッチ結果:`, match ? `成功 - ${JSON.stringify(match)}` : '失敗')
+      
       if (match) {
-        // デバッグログ3: マッチ結果
-        console.log('マッチ結果:', match)
+        console.log('  - マッチした全体:', match[0])
+        console.log('  - キャプチャグループ[1]:', match[1])
         
         // マッチしたら正規化
-        const value = match[1].toUpperCase().replace(/[^T0-9]/g, '')
-        // 正しいフォーマットかチェック(T + 13桁の数字)
-        if (/^T\d{13}$/.test(value)) {
-          console.log(`登録番号検出(ラベル付き): ${value}`)
+        let value = match[1]
+        console.log('  - 正規化前の値:', value)
+        
+        // ステップ1: 先頭の誤認識文字を「T」に置き換え
+        const beforeTReplacement = value
+        value = value.replace(/^[イ1lLI『｢「]/i, 'T')
+        console.log(`  - ステップ1(先頭文字をTに): "${beforeTReplacement}" → "${value}"`)
+        
+        // ステップ2: 全角数字を半角に変換
+        const beforeFullWidthConversion = value
+        value = value.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        console.log(`  - ステップ2(全角→半角): "${beforeFullWidthConversion}" → "${value}"`)
+        
+        // ステップ3: 数字以外を削除(Tは残す)
+        const beforeCleanup = value
+        value = value.replace(/[^T0-9]/g, '')
+        console.log(`  - ステップ3(T以外の非数字削除): "${beforeCleanup}" → "${value}"`)
+        
+        // ステップ4: Tがない場合は先頭に追加
+        const beforeTAddition = value
+        if (!/^T/.test(value) && /^\d{13}$/.test(value)) {
+          value = 'T' + value
+          console.log(`  - ステップ4(先頭にT追加): "${beforeTAddition}" → "${value}"`)
+        } else {
+          console.log(`  - ステップ4(T追加スキップ): "${value}" (既にTあり、または13桁でない)`)
+        }
+        
+        // ステップ5: 正しいフォーマットかチェック(T + 13桁の数字)
+        const isValid = /^T\d{13}$/.test(value)
+        console.log(`  - ステップ5(フォーマット検証): ${isValid ? '✓ 有効' : '✗ 無効'}`)
+        console.log(`  - 最終的な値: "${value}" (長さ: ${value.length})`)
+        
+        if (isValid) {
+          console.log(`✓ 登録番号検出成功(ラベル付き): ${value}`)
+          console.log('=== 登録番号抽出終了(成功) ===')
           return {
             value: value,
             confidence: 0.95,
           }
+        } else {
+          console.log(`✗ フォーマット不一致: 期待="T + 13桁", 実際="${value}"`)
         }
       }
     }
+    console.log('=== ラベル付きパターンでのマッチング終了(全て失敗) ===')
     
     // パターン2: ラベルなしでT + 13桁を検出
-    const unlabeledPattern = /\b([TtＴ]\d{13,})\b/
+    console.log('=== ラベルなしパターンでのマッチング開始 ===')
+    const unlabeledPattern = /\b([TtＳ『｢「]\d{13,})\b/
+    console.log('パターン:', unlabeledPattern.source)
+    
     const unlabeledMatch = normalizedText.match(unlabeledPattern)
+    console.log('マッチ結果:', unlabeledMatch ? `成功 - ${JSON.stringify(unlabeledMatch)}` : '失敗')
     
     if (unlabeledMatch) {
+      console.log('  - マッチした全体:', unlabeledMatch[0])
+      console.log('  - キャプチャグループ[1]:', unlabeledMatch[1])
+      
       // マッチしたら正規化
-      const value = unlabeledMatch[1].toUpperCase().replace(/[^T0-9]/g, '')
+      let value = unlabeledMatch[1]
+      console.log('  - 正規化前:', value)
+      
+      // 先頭の誤認識文字を「T」に置き換え
+      const beforeTReplacement = value
+      value = value.replace(/^[イ1lLI『｢「]/i, 'T')
+      console.log(`  - 先頭文字をTに: "${beforeTReplacement}" → "${value}"`)
+      
+      value = value.toUpperCase()
+      console.log('  - 大文字化後:', value)
+      
+      value = value.replace(/[^T0-9]/g, '')
+      console.log('  - 非T・非数字削除後:', value)
+      
+      // Tがない場合は先頭に追加
+      const beforeTAddition = value
+      if (!/^T/.test(value) && /^\d{13}$/.test(value)) {
+        value = 'T' + value
+        console.log(`  - 先頭にT追加: "${beforeTAddition}" → "${value}"`)
+      }
+      
       // 正しいフォーマットかチェック
-      if (/^T\d{13}$/.test(value)) {
-        console.log(`登録番号検出(ラベルなし): ${value}`)
+      const isValid = /^T\d{13}$/.test(value)
+      console.log(`  - フォーマット検証: ${isValid ? '✓ 有効' : '✗ 無効'}`)
+      
+      if (isValid) {
+        console.log(`✓ 登録番号検出成功(ラベルなし): ${value}`)
+        console.log('=== 登録番号抽出終了(成功) ===')
         return {
           value: value,
           confidence: 0.7,
         }
       }
     }
+    console.log('=== ラベルなしパターンでのマッチング終了(失敗) ===')
     
-    console.log('登録番号は検出されませんでした')
+    console.log('✗ 登録番号は検出されませんでした')
+    console.log('=== 登録番号抽出終了(失敗) ===')
     return undefined
   }
 
@@ -586,15 +660,29 @@ export class OCRProcessor {
    * 発行元住所の抽出
    */
   private extractIssuerAddress(text: string, lines: string[]): FieldExtraction | undefined {
+    // 1. まず発行元企業名を取得
+    const issuerName = this.extractIssuerName(text)
+    
     // スペースを削除
     const normalizedText = text.replace(/\s+/g, '')
     
+    // 2. 企業名が見つかった場合、その位置より後ろを検索対象にする
+    let searchText = normalizedText
+    if (issuerName) {
+      const issuerNameIndex = normalizedText.indexOf(issuerName.value)
+      if (issuerNameIndex !== -1) {
+        searchText = normalizedText.substring(issuerNameIndex + issuerName.value.length)
+        console.log(`企業名「${issuerName.value}」より後ろを検索対象にします`)
+      }
+    }
+    
+    // 3. searchText に対して既存の正規表現で住所を検索
     // 〒郵便番号から始まる住所を抽出（TELの前まで）
     const addressWithPostalMark = /〒?\d{3}-?\d{4}([^TEL]+)/
-    const match1 = normalizedText.match(addressWithPostalMark)
+    const match1 = searchText.match(addressWithPostalMark)
     
     if (match1) {
-      let address = match1[1] + match1[2]
+      let address = match1[0]
       // TELを含む場合は除去
       address = address.replace(/TEL.*/g, '').trim()
       console.log(`発行元住所検出: ${address}`)
@@ -605,7 +693,7 @@ export class OCRProcessor {
     }
     // 〒なしで都道府県から始まるパターン
     const prefecturePattern = /(東京都|北海道|(?:京都|大阪)府|.{2,3}県)[^\nTEL]+/
-    const match2 = normalizedText.match(prefecturePattern)
+    const match2 = searchText.match(prefecturePattern)
     
     if (match2) {
       let address = match2[0]
@@ -891,6 +979,9 @@ export class OCRProcessor {
       }
     }
     
+    // 品名の先頭から番号を削除
+    description = description.replace(/^[\d０-９]+[\s　]*/, '')
+    
     console.log(`抽出された品名: "${description}"`)
 
     // 品名が妥当かチェック(2文字以上、100文字以下)
@@ -965,6 +1056,143 @@ export class OCRProcessor {
     }
     
     console.log(`=== processLineItem 終了 ===`)
+  }
+
+  /**
+   * 請求先企業名の抽出
+   * 
+   * 「請求先」キーワードの次の行から企業名を抽出
+   * - 法人格を含む行を優先
+   * - 敬称のみの行はスキップ
+   * - 最大3行先まで探索
+   */
+  private extractClient(text: string, lines: string[]): FieldExtraction | undefined {
+    console.log('=== extractClient デバッグ開始 ===')
+    console.log('全テキスト行数:', lines.length)
+    
+    // 「請求先」キーワードを含む行のインデックスを検索
+    let billingToIndex = -1
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].replace(/\s+/g, '').includes('請求先')) {
+        billingToIndex = i
+        console.log(`「請求先」キーワード検出: 行${i + 1}, 内容: "${lines[i]}"`)
+        break
+      }
+    }
+
+    // 「請求先」が見つからない場合は従来の方法で抽出
+    if (billingToIndex === -1) {
+      console.log('「請求先」キーワードが見つかりません。従来の方法を試行します。')
+      const clientPattern = /([^\n]+?)(?:様|御中|宛)/
+      const clientMatch = text.match(clientPattern)
+      if (clientMatch) {
+        console.log(`従来の方法で企業名検出: "${clientMatch[1].trim()}"`)
+        console.log('=== extractClient デバッグ終了 ===')
+        return {
+          value: clientMatch[1].trim(),
+          confidence: 0.8,
+        }
+      }
+      console.log('従来の方法でも企業名が見つかりませんでした')
+      console.log('=== extractClient デバッグ終了 ===')
+      return undefined
+    }
+
+    // 法人格パターン（スペースを許容）
+    const corporatePattern = /株\s*式\s*会\s*社|有\s*限\s*会\s*社|合\s*同\s*会\s*社|合\s*資\s*会\s*社|一\s*般\s*社\s*団\s*法\s*人|財\s*団\s*法\s*人/
+
+    console.log(`「請求先」の次から最大3行を探索します (開始行: ${billingToIndex + 2})`)
+    
+    // 「請求先」の次の行から最大3行先まで探索
+    const maxSearchLines = 3
+    for (let offset = 1; offset <= maxSearchLines && billingToIndex + offset < lines.length; offset++) {
+      const lineIndex = billingToIndex + offset
+      const line = lines[lineIndex].trim()
+      
+      console.log(`--- 行${lineIndex + 1}を検査 ---`)
+      console.log(`  内容: "${line}"`)
+      console.log(`  長さ: ${line.length}`)
+      
+      // 空行はスキップ
+      if (!line) {
+        console.log('  判定: 空行のためスキップ')
+        continue
+      }
+
+      // 敬称のみの行はスキップ
+      if (/^(様|御中|殿)$/.test(line)) {
+        console.log(`  判定: 敬称のみの行をスキップ`)
+        continue
+      }
+
+      // 法人格パターンのマッチングをテスト
+      const hasCorporateType = corporatePattern.test(line)
+      console.log(`  法人格パターンマッチ: ${hasCorporateType}`)
+      
+      if (hasCorporateType) {
+        console.log(`  マッチした法人格パターン:`, line.match(corporatePattern))
+      }
+
+      // 法人格を含む行を優先
+      if (hasCorporateType) {
+        // スペースを削除して正規化
+        let cleanedLine = line.replace(/\s+/g, '')
+        // 敬称が含まれている場合は除去
+        cleanedLine = cleanedLine.replace(/(?:様|御中|殿)$/, '').trim()
+        console.log(`  スペース削除後: "${cleanedLine}"`)
+        console.log(`✓ 法人格を含む企業名を検出: "${cleanedLine}"`)
+        console.log('=== extractClient デバッグ終了 ===')
+        return {
+          value: cleanedLine,
+          confidence: 0.9,
+        }
+      }
+    }
+
+    console.log('法人格パターンが見つかりませんでした。敬称以外の最初の行を探します。')
+
+    // 法人格が見つからない場合、敬称以外の最初の行を返す
+    for (let offset = 1; offset <= maxSearchLines && billingToIndex + offset < lines.length; offset++) {
+      const lineIndex = billingToIndex + offset
+      const line = lines[lineIndex].trim()
+      
+      console.log(`--- フォールバック: 行${lineIndex + 1}を検査 ---`)
+      console.log(`  内容: "${line}"`)
+      
+      // 空行はスキップ
+      if (!line) {
+        console.log('  判定: 空行のためスキップ')
+        continue
+      }
+
+      // 敬称のみの行はスキップ
+      if (/^(様|御中|殿)$/.test(line)) {
+        console.log('  判定: 敬称のみのためスキップ')
+        continue
+      }
+
+      // スペースを削除して正規化
+      let cleanedLine = line.replace(/\s+/g, '')
+      // 敬称が含まれている場合は除去
+      cleanedLine = cleanedLine.replace(/(?:様|御中|殿)$/, '').trim()
+      
+      console.log(`  スペース削除後: "${cleanedLine}"`)
+      console.log(`  長さ: ${cleanedLine.length}`)
+      
+      // 有効な企業名かチェック（最低2文字以上）
+      if (cleanedLine.length >= 2) {
+        console.log(`✓ 企業名を検出(法人格なし): "${cleanedLine}"`)
+        console.log('=== extractClient デバッグ終了 ===')
+        return {
+          value: cleanedLine,
+          confidence: 0.7,
+        }
+      }
+    }
+
+    console.log('✗ 「請求先」の後に有効な企業名が見つかりませんでした')
+    console.log('=== extractClient デバッグ終了 ===')
+    return undefined
   }
 
   /**

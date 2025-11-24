@@ -117,25 +117,29 @@ export async function pdfToImage(file: File): Promise<string> {
 
 /**
  * ファイルを添付ファイル形式に変換
+ * 🆕 LocalStorage最適化: base64Dataは保存しない（メタデータのみ）
  */
 export async function createAttachment(file: File): Promise<InvoiceAttachment> {
-  let base64Data: string
-
-  if (file.type === "application/pdf") {
-    base64Data = await fileToBase64(file)
-  } else if (file.type.startsWith("image/")) {
-    base64Data = await compressImage(file, 1)
-  } else {
-    throw new Error("サポートされていないファイル形式です")
-  }
-
   return {
     id: `att_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     fileName: file.name,
     fileType: file.type,
     fileSize: file.size,
-    base64Data,
     uploadedAt: new Date(),
+  }
+}
+
+/**
+ * ファイルをOCR処理用に画像データに変換
+ * 🆕 LocalStorage最適化: OCR処理のためだけに使用し、保存しない
+ */
+export async function fileToImageForOCR(file: File): Promise<string> {
+  if (file.type === "application/pdf") {
+    return await pdfToImage(file)
+  } else if (file.type.startsWith("image/")) {
+    return await compressImage(file, 1)
+  } else {
+    throw new Error("サポートされていないファイル形式です")
   }
 }
 

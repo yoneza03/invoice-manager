@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { Invoice, Client, Settings, Payment, InvoiceStatus } from "./types"
 import { mockInvoices, mockClients, mockSettings, mockPayments } from "./mock-data"
+import { migrateInvoiceStorage } from "./migration"
 
 interface StoreContextType {
   invoices: Invoice[]
@@ -31,6 +32,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // LocalStorageからデータを読み込む
   useEffect(() => {
+    // マイグレーション処理を実行
+    const migrated = localStorage.getItem('storage_migrated_v1')
+    if (!migrated) {
+      migrateInvoiceStorage().then(() => {
+        localStorage.setItem('storage_migrated_v1', 'true')
+      })
+    }
+
     const savedInvoices = localStorage.getItem("invoices")
     const savedClients = localStorage.getItem("clients")
     const savedSettings = localStorage.getItem("settings")

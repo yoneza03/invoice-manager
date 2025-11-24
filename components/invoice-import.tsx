@@ -5,8 +5,9 @@ import { useDropzone } from "react-dropzone"
 import { Upload, FileText, Image as ImageIcon, X, Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { invoiceImportService } from "@/lib/invoice-import-service"
 import { useStore } from "@/lib/store"
-import { Invoice, OCRResult } from "@/lib/types"
+import { Invoice, OCRResult, InvoiceData } from "@/lib/types"
 import { formatFileSize } from "@/lib/file-processor"
+import { extractInvoiceData } from "@/lib/ocr/invoiceExtractor"
 
 type ProcessingStatus = "idle" | "uploading" | "processing" | "success" | "error"
 

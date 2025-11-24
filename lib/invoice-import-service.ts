@@ -1,6 +1,6 @@
 import { Invoice, InvoiceAttachment, InvoiceSource, OCRResult, Client, InvoiceLineItem, IssuerInfo } from "./types"
 import { ocrProcessor } from "./ocr-processor"
-import { createAttachment, pdfToImage, validateFile } from "./file-processor"
+import { createAttachment, fileToImageForOCR, validateFile } from "./file-processor"
 
 /**
  * 請求書インポートサービス
@@ -23,19 +23,11 @@ export class InvoiceImportService {
       throw new Error(validation.error)
     }
 
-    // 添付ファイルを作成
+    // 🆕 LocalStorage最適化: メタデータのみの添付ファイルを作成（base64Dataなし）
     const attachment = await createAttachment(file)
 
-    // OCR処理用の画像データを準備
-    let imageData: string
-
-    if (file.type === "application/pdf") {
-      // PDFを画像に変換
-      imageData = await pdfToImage(file)
-    } else {
-      // 画像ファイルはそのまま使用
-      imageData = attachment.base64Data
-    }
+    // 🆕 OCR処理用の画像データを準備（一時的に使用、保存しない）
+    const imageData = await fileToImageForOCR(file)
 
     // OCR処理を実行
     const ocrData = await ocrProcessor.processInvoice(imageData)
@@ -53,6 +45,7 @@ export class InvoiceImportService {
         updatedAt: new Date(),
         isReadonly: true,
         originalPdfAttachmentId: attachment.id,
+        pdfStorageLocation: 'none',  // 🆕 PDFデータは保存しない
       },
       attachment,
       ocrData,
