@@ -233,7 +233,183 @@ export default function InvoiceImport() {
     }
   }, [extractedData, ocrConfidence, hasShownToast])
 
-  // extractedDataをフォームに自動入力
+  // OCR抽出データをフォームに反映する関数
+  const applyExtractedDataToForm = useCallback((data: InvoiceData) => {
+    if (!selectedFile?.result) return;
+    
+    console.log('[applyExtractedDataToForm] データ反映開始', data);
+    
+    // InvoiceDataからPartial<Invoice>への変換とマッピング
+    const updatedInvoice: Partial<Invoice> = {
+      ...selectedFile.result.invoice,
+    };
+
+    // 基本情報の自動入力
+    if (data.basicInfo) {
+      if (data.basicInfo.invoiceNumber) {
+        updatedInvoice.invoiceNumber = data.basicInfo.invoiceNumber;
+      }
+      if (data.basicInfo.issueDate) {
+        updatedInvoice.issueDate = new Date(data.basicInfo.issueDate);
+      }
+      // 取引日の自動入力
+      if (data.basicInfo.transactionDate) {
+        const transactionDateNote = `取引日: ${data.basicInfo.transactionDate}`;
+        updatedInvoice.notes = updatedInvoice.notes
+          ? `${updatedInvoice.notes}\n${transactionDateNote}`
+          : transactionDateNote;
+      }
+      // 通貨の自動入力
+      if (data.basicInfo.currency && data.basicInfo.currency !== 'JPY') {
+        const currencyNote = `通貨: ${data.basicInfo.currency}`;
+        updatedInvoice.notes = updatedInvoice.notes
+          ? `${updatedInvoice.notes}\n${currencyNote}`
+          : currencyNote;
+      }
+      // 件名の自動入力
+      if (data.basicInfo.subject) {
+        const subjectNote = `件名: ${data.basicInfo.subject}`;
+        updatedInvoice.notes = updatedInvoice.notes
+          ? `${updatedInvoice.notes}\n${subjectNote}`
+          : subjectNote;
+      }
+      // 発注番号の自動入力
+      if (data.basicInfo.orderNumber) {
+        const orderNote = `発注番号: ${data.basicInfo.orderNumber}`;
+        updatedInvoice.notes = updatedInvoice.notes
+          ? `${updatedInvoice.notes}\n${orderNote}`
+          : orderNote;
+      }
+    }
+
+    // 請求先情報の自動入力
+    if (data.billingTo && updatedInvoice.client) {
+      updatedInvoice.client = {
+        ...updatedInvoice.client,
+        name: data.billingTo.companyName,
+        // 担当者名の自動入力
+        contactPerson: data.billingTo.contactPerson || updatedInvoice.client.contactPerson,
+      };
+      // 部署名の自動入力
+      if (data.billingTo.department) {
+        const deptMemo = `部署: ${data.billingTo.department}`;
+        updatedInvoice.client.memo = updatedInvoice.client.memo
+          ? `${updatedInvoice.client.memo}\n${deptMemo}`
+          : deptMemo;
+      }
+    }
+
+    // 金額情報の自動入力
+    if (data.amountInfo) {
+      updatedInvoice.subtotal = data.amountInfo.subtotal;
+      updatedInvoice.tax = data.amountInfo.taxAmount;
+      updatedInvoice.total = data.amountInfo.totalAmount;
+      
+      // 税率を計算
+      if (data.amountInfo.taxBreakdown.length > 0) {
+        updatedInvoice.taxRate = data.amountInfo.taxBreakdown[0].rate;
+      } else if (data.amountInfo.subtotal > 0) {
+        updatedInvoice.taxRate = (data.amountInfo.taxAmount / data.amountInfo.subtotal) * 100;
+      }
+    }
+
+    // 発行者情報の自動入力
+    if (data.issuerInfo) {
+      updatedInvoice.issuerInfo = {
+        name: data.issuerInfo.name,
+        address: data.issuerInfo.address,
+        phone: data.issuerInfo.phone,
+        email: data.issuerInfo.email,
+        registrationNumber: data.issuerInfo.registrationNumber,
+      };
+    }
+
+    // 支払条件の自動入力
+    if (data.paymentTerms) {
+      if (data.paymentTerms.dueDate) {
+        updatedInvoice.dueDate = new Date(data.paymentTerms.dueDate);
+      }
+      
+      updatedInvoice.paymentInfo = {
+        bankName: data.paymentTerms.bankName || undefined,
+        branchName: data.paymentTerms.branchName || undefined,
+        accountType: data.paymentTerms.accountType || undefined,
+        accountNumber: data.paymentTerms.accountNumber || undefined,
+        accountHolder: data.paymentTerms.accountHolder || undefined,
+      };
+      
+      // 支払条件の自動入力
+      if (data.paymentTerms.paymentCondition) {
+        const paymentConditionNote = `支払条件: ${data.paymentTerms.paymentCondition}`;
+        updatedInvoice.notes = updatedInvoice.notes
+          ? `${updatedInvoice.notes}\n${paymentConditionNote}`
+          : paymentConditionNote;
+      }
+      
+      // 振込手数料負担の自動入力
+      if (data.paymentTerms.feeBearer) {
+        const feeBearerNote = `振込手数料負担: ${data.paymentTerms.feeBearer}`;
+        updatedInvoice.notes = updatedInvoice.notes
+          ? `${updatedInvoice.notes}\n${feeBearerNote}`
+          : feeBearerNote;
+      }
+    }
+
+    // 明細行の自動入力
+    if (data.lineItems && data.lineItems.length > 0) {
+      updatedInvoice.lineItems = data.lineItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || item.amount,
+        amount: item.amount,
+      }));
+    }
+
+    // メタデータ情報の反映
+    if (data.metadata) {
+      updatedInvoice.source = data.metadata.source;
+      updatedInvoice.status = data.metadata.status;
+      if (data.metadata.notes) {
+        updatedInvoice.notes = data.metadata.notes;
+      }
+      if (data.metadata.paidDate) {
+        updatedInvoice.paidDate = new Date(data.metadata.paidDate);
+      }
+    }
+
+    // ファイルの結果を更新
+    setImportedFiles((prev) =>
+      prev.map((f) =>
+        f.file === selectedFile.file
+          ? {
+              ...f,
+              result: {
+                ...f.result!,
+                invoice: updatedInvoice,
+              },
+            }
+          : f
+      )
+    );
+
+    // selectedFileも更新（UIに即座に反映）
+    setSelectedFile(prev =>
+      prev && prev.file === selectedFile.file
+        ? {
+            ...prev,
+            result: {
+              ...prev.result!,
+              invoice: updatedInvoice,
+            },
+          }
+        : prev
+    );
+
+    console.log('[applyExtractedDataToForm] フォームへの自動入力完了', updatedInvoice);
+  }, [selectedFile]);
+
+  // extractedDataをフォームに自動入力（applyExtractedDataToForm関数を呼び出し）
   useEffect(() => {
     if (extractedData && selectedFile && selectedFile.result) {
       // 開発環境でのみデバッグログを出力
@@ -242,125 +418,10 @@ export default function InvoiceImport() {
         console.log('OCR信頼度:', ocrConfidence)
       }
       
-      console.log('[Auto-Fill] extractedDataをフォームに自動入力開始', extractedData)
-      
-      // InvoiceDataからPartial<Invoice>への変換とマッピング
-      const updatedInvoice: Partial<Invoice> = {
-        ...selectedFile.result.invoice,
-      }
-
-      // 基本情報の自動入力
-      if (extractedData.basicInfo) {
-        if (extractedData.basicInfo.invoiceNumber) {
-          updatedInvoice.invoiceNumber = extractedData.basicInfo.invoiceNumber
-        }
-        if (extractedData.basicInfo.issueDate) {
-          updatedInvoice.issueDate = new Date(extractedData.basicInfo.issueDate)
-        }
-      }
-
-      // 請求先情報の自動入力
-      if (extractedData.billingTo && updatedInvoice.client) {
-        updatedInvoice.client = {
-          ...updatedInvoice.client,
-          name: extractedData.billingTo.companyName,
-        }
-      }
-
-      // 金額情報の自動入力
-      if (extractedData.amountInfo) {
-        updatedInvoice.subtotal = extractedData.amountInfo.subtotal
-        updatedInvoice.tax = extractedData.amountInfo.taxAmount
-        updatedInvoice.total = extractedData.amountInfo.totalAmount
-        
-        // 税率を計算（taxBreakdownから取得、なければ計算）
-        if (extractedData.amountInfo.taxBreakdown.length > 0) {
-          updatedInvoice.taxRate = extractedData.amountInfo.taxBreakdown[0].rate
-        } else if (extractedData.amountInfo.subtotal > 0) {
-          updatedInvoice.taxRate = (extractedData.amountInfo.taxAmount / extractedData.amountInfo.subtotal) * 100
-        }
-      }
-
-      // 発行者情報の自動入力
-      if (extractedData.issuerInfo) {
-        updatedInvoice.issuerInfo = {
-          name: extractedData.issuerInfo.name,
-          address: extractedData.issuerInfo.address,
-          phone: extractedData.issuerInfo.phone,
-          email: extractedData.issuerInfo.email,
-          registrationNumber: extractedData.issuerInfo.registrationNumber,
-        }
-      }
-
-      // 支払条件の自動入力
-      if (extractedData.paymentTerms) {
-        if (extractedData.paymentTerms.dueDate) {
-          updatedInvoice.dueDate = new Date(extractedData.paymentTerms.dueDate)
-        }
-        
-        updatedInvoice.paymentInfo = {
-          bankName: extractedData.paymentTerms.bankName || undefined,
-          branchName: extractedData.paymentTerms.branchName || undefined,
-          accountType: extractedData.paymentTerms.accountType || undefined,
-          accountNumber: extractedData.paymentTerms.accountNumber || undefined,
-          accountHolder: extractedData.paymentTerms.accountHolder || undefined,
-        }
-      }
-
-      // 明細行の自動入力
-      if (extractedData.lineItems && extractedData.lineItems.length > 0) {
-        updatedInvoice.lineItems = extractedData.lineItems.map(item => ({
-          id: item.id,
-          description: item.description,
-          quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || item.amount,
-          amount: item.amount,
-        }))
-      }
-
-      // メタデータ情報の反映
-      if (extractedData.metadata) {
-        updatedInvoice.source = extractedData.metadata.source
-        updatedInvoice.status = extractedData.metadata.status
-        if (extractedData.metadata.notes) {
-          updatedInvoice.notes = extractedData.metadata.notes
-        }
-        if (extractedData.metadata.paidDate) {
-          updatedInvoice.paidDate = new Date(extractedData.metadata.paidDate)
-        }
-      }
-
-      // ファイルの結果を更新
-      setImportedFiles((prev) =>
-        prev.map((f) =>
-          f.file === selectedFile.file
-            ? {
-                ...f,
-                result: {
-                  ...f.result!,
-                  invoice: updatedInvoice,
-                },
-              }
-            : f
-        )
-      )
-
-      // selectedFileも更新（UIに即座に反映）
-      setSelectedFile(prev =>
-        prev && prev.file === selectedFile.file
-          ? {
-              ...prev,
-              result: {
-                ...prev.result!,
-                invoice: updatedInvoice,
-              },
-            }
-          : prev
-      )
-
-      console.log('[Auto-Fill] フォームへの自動入力完了', updatedInvoice)
+      // applyExtractedDataToForm関数を呼び出してフォームに反映
+      applyExtractedDataToForm(extractedData)
     }
-  }, [extractedData, selectedFile?.file])
+  }, [extractedData, selectedFile?.file, applyExtractedDataToForm])
 
   const removeFile = (file: File) => {
     setImportedFiles((prev) => prev.filter((f) => f.file !== file))
@@ -717,8 +778,11 @@ export default function InvoiceImport() {
                                               invoice: {
                                                 ...f.result!.invoice,
                                                 issuerInfo: {
-                                                  ...f.result!.invoice.issuerInfo,
                                                   name: e.target.value,
+                                                  address: f.result!.invoice.issuerInfo?.address || '',
+                                                  phone: f.result!.invoice.issuerInfo?.phone || '',
+                                                  email: f.result!.invoice.issuerInfo?.email || '',
+                                                  registrationNumber: f.result!.invoice.issuerInfo?.registrationNumber || '',
                                                 },
                                               },
                                             },
@@ -746,8 +810,11 @@ export default function InvoiceImport() {
                                               invoice: {
                                                 ...f.result!.invoice,
                                                 issuerInfo: {
-                                                  ...f.result!.invoice.issuerInfo,
+                                                  name: f.result!.invoice.issuerInfo?.name || '',
                                                   address: e.target.value,
+                                                  phone: f.result!.invoice.issuerInfo?.phone || '',
+                                                  email: f.result!.invoice.issuerInfo?.email || '',
+                                                  registrationNumber: f.result!.invoice.issuerInfo?.registrationNumber || '',
                                                 },
                                               },
                                             },
@@ -776,8 +843,11 @@ export default function InvoiceImport() {
                                                 invoice: {
                                                   ...f.result!.invoice,
                                                   issuerInfo: {
-                                                    ...f.result!.invoice.issuerInfo,
+                                                    name: f.result!.invoice.issuerInfo?.name || '',
+                                                    address: f.result!.invoice.issuerInfo?.address || '',
                                                     phone: e.target.value,
+                                                    email: f.result!.invoice.issuerInfo?.email || '',
+                                                    registrationNumber: f.result!.invoice.issuerInfo?.registrationNumber || '',
                                                   },
                                                 },
                                               },
@@ -805,8 +875,11 @@ export default function InvoiceImport() {
                                                 invoice: {
                                                   ...f.result!.invoice,
                                                   issuerInfo: {
-                                                    ...f.result!.invoice.issuerInfo,
+                                                    name: f.result!.invoice.issuerInfo?.name || '',
+                                                    address: f.result!.invoice.issuerInfo?.address || '',
+                                                    phone: f.result!.invoice.issuerInfo?.phone || '',
                                                     email: e.target.value,
+                                                    registrationNumber: f.result!.invoice.issuerInfo?.registrationNumber || '',
                                                   },
                                                 },
                                               },
@@ -835,7 +908,10 @@ export default function InvoiceImport() {
                                               invoice: {
                                                 ...f.result!.invoice,
                                                 issuerInfo: {
-                                                  ...f.result!.invoice.issuerInfo,
+                                                  name: f.result!.invoice.issuerInfo?.name || '',
+                                                  address: f.result!.invoice.issuerInfo?.address || '',
+                                                  phone: f.result!.invoice.issuerInfo?.phone || '',
+                                                  email: f.result!.invoice.issuerInfo?.email || '',
                                                   registrationNumber: e.target.value,
                                                 },
                                               },
