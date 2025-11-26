@@ -970,7 +970,7 @@ function extractAmounts(text: string): {
     }
   }
 
-  // Phase 3: 税率別内訳の抽出
+  // Phase 3: 税率別内訳の抽出（正規化処理を追加）
   const taxBreakdownPattern = /(?:10%|8%)(?:対象|税率|消費税)[:\s：¥\\￥円]*([0-9,，]+)/gi
   const taxBreakdowns = Array.from(text.matchAll(taxBreakdownPattern))
   
@@ -979,7 +979,9 @@ function extractAmounts(text: string): {
     for (const breakdown of taxBreakdowns) {
       const rateMatch = breakdown[0].match(/(\d+)%/)
       if (rateMatch) {
-        detectedTaxRate = Number(rateMatch[1])
+        // 税率テキストを正規化: 「10%」→ 数値10
+        const normalized = rateMatch[1].replace("%", "").trim()
+        detectedTaxRate = Number(normalized)
         break
       }
     }
@@ -999,7 +1001,7 @@ function extractAmounts(text: string): {
     }
   }
 
-  // 金額の計算と税率の推定
+  // 金額の計算と税率の推定（正規化済み税率を使用）
   let finalSubtotal: number
   let finalTax: number
   let taxRate: number
@@ -1007,6 +1009,7 @@ function extractAmounts(text: string): {
   if (subtotal > 0 && tax > 0) {
     finalSubtotal = subtotal
     finalTax = tax
+    // 税率を数値（10や8など）として計算
     taxRate = subtotal > 0 ? (tax / subtotal) * 100 : detectedTaxRate
   } else if (subtotal > 0) {
     finalSubtotal = subtotal
@@ -1017,7 +1020,7 @@ function extractAmounts(text: string): {
     finalSubtotal = total - tax
     taxRate = (total - tax) > 0 ? (tax / (total - tax)) * 100 : detectedTaxRate
   } else {
-    // 検出された税率または10%税率を使用
+    // 検出された税率を使用（既に数値10として正規化済み）
     const taxMultiplier = 1 + (detectedTaxRate / 100)
     finalSubtotal = Math.round(total / taxMultiplier)
     finalTax = total - finalSubtotal
@@ -1028,6 +1031,7 @@ function extractAmounts(text: string): {
     subtotal: finalSubtotal,
     taxAmount: finalTax,
     totalAmount: total,
+    // taxRateは10や8などの数値として返す（画面表示では「10%」になる）
     taxRate: Math.round(taxRate * 10) / 10,
   }
 }

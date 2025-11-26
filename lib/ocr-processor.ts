@@ -291,53 +291,50 @@ export class OCRProcessor {
     }
 
     // 支払情報の抽出
-    // 銀行名の抽出（改善版 - 空白を許容）
-    // パターン: 「○○銀行」（空白が混じっていても可）
-    const bankNamePattern = /([ぁ-んァ-ヶー一-龠\s]{3,20}銀\s*行)/
-    const bankMatch = text.match(bankNamePattern)
+    // 銀行名の抽出（指定銀行名パターン + 汎用パターン）
+    const specificBankPattern = /(みずほ銀行|三井住友銀行|三菱UFJ銀行|りそな銀行|ゆうちょ銀行)/
+    const specificBankMatch = text.match(specificBankPattern)
     
-    if (bankMatch) {
-      const bankName = bankMatch[1].replace(/\s+/g, "").trim()
-      if (bankName.length >= 3 && bankName.length <= 15 && bankName.includes('銀行')) {
-        fields.bankName = {
-          value: bankName,
-          confidence: 0.85,
-        }
+    if (specificBankMatch) {
+      fields.bankName = {
+        value: specificBankMatch[1],
+        confidence: 0.95,
       }
-    }
-
-    // 支店名の抽出（改善版 - 空白を許容）
-    // パターン: 「○○支店」または「○○支所」（空白が混じっていても可）
-    const branchNamePattern = /([ぁ-んァ-ヶー一-龠\s]{3,20}(?:支\s*店|支\s*所))/
-    
-    // 銀行名が見つかった場合、その後ろから支店名を探す
-    if (fields.bankName) {
-      // 元のテキストから銀行名（空白あり）を探す
-      const bankNameWithSpaces = text.match(bankNamePattern)
-      if (bankNameWithSpaces) {
-        const bankNameIndex = text.indexOf(bankNameWithSpaces[0])
-        if (bankNameIndex !== -1) {
-          const textAfterBank = text.substring(bankNameIndex + bankNameWithSpaces[0].length)
-          const branchMatch = textAfterBank.match(branchNamePattern)
-          if (branchMatch) {
-            const branchName = branchMatch[1].replace(/\s+/g, "").trim()
-            if (branchName.length >= 3 && branchName.length <= 15 &&
-                (branchName.includes('支店') || branchName.includes('支所'))) {
-              fields.branchName = {
-                value: branchName,
-                confidence: 0.85,
-              }
-            }
+    } else {
+      // 汎用銀行名パターン（空白を許容）
+      const bankNamePattern = /([ぁ-んァ-ヶー一-龠\s]{3,20}銀\s*行)/
+      const bankMatch = text.match(bankNamePattern)
+      
+      if (bankMatch) {
+        const bankName = bankMatch[1].replace(/\s+/g, "").trim()
+        if (bankName.length >= 3 && bankName.length <= 15 && bankName.includes('銀行')) {
+          fields.bankName = {
+            value: bankName,
+            confidence: 0.85,
           }
         }
       }
     }
+
+    // 支店名の抽出（銀行名の後から探索）
+    const branchNamePattern = /銀行\s*([^\s]+支店)/
+    const branchMatch = text.match(branchNamePattern)
     
-    // 銀行名が見つからなかった場合、テキスト全体から支店名を探す
-    if (!fields.branchName) {
-      const branchMatch = text.match(branchNamePattern)
-      if (branchMatch) {
-        const branchName = branchMatch[1].replace(/\s+/g, "").trim()
+    if (branchMatch) {
+      const branchName = branchMatch[1].replace(/\s+/g, "").trim()
+      if (branchName.length >= 3 && branchName.length <= 15 && branchName.includes('支店')) {
+        fields.branchName = {
+          value: branchName,
+          confidence: 0.9,
+        }
+      }
+    } else {
+      // フォールバック: 汎用支店名パターン
+      const fallbackBranchPattern = /([ぁ-んァ-ヶー一-龠\s]{3,20}(?:支\s*店|支\s*所))/
+      const fallbackMatch = text.match(fallbackBranchPattern)
+      
+      if (fallbackMatch) {
+        const branchName = fallbackMatch[1].replace(/\s+/g, "").trim()
         if (branchName.length >= 3 && branchName.length <= 15 &&
             (branchName.includes('支店') || branchName.includes('支所'))) {
           fields.branchName = {
@@ -369,17 +366,18 @@ export class OCRProcessor {
       }
     }
 
-    // 口座番号の抽出（7桁程度の数字）
+    // 口座番号の抽出（6〜10桁の数字）
     const accountNumberPatterns = [
-      /(?:口座番号|口座No|Account|account)[:\s#]*([0-9]{5,8})/i,
-      /(?:No|NO)[:\s]*([0-9]{7})/,
+      /(?:口座番号|口座No|Account|account)[:\s#]*([0-9]{6,10})/i,
+      /(?:No|NO)[:\s]*([0-9]{6,10})/,
+      /(?:普通|当座)[:\s]*([0-9]{6,10})/,
     ]
     
     for (const pattern of accountNumberPatterns) {
       const match = text.match(pattern)
       if (match) {
         const accountNumber = match[1].trim()
-        if (accountNumber.length >= 5 && accountNumber.length <= 8) {
+        if (accountNumber.length >= 6 && accountNumber.length <= 10) {
           fields.accountNumber = {
             value: accountNumber,
             confidence: 0.85,
@@ -389,10 +387,10 @@ export class OCRProcessor {
       }
     }
 
-    // 口座番号が見つからない場合、7桁の数字を探す
+    // 口座番号が見つからない場合、6〜10桁の数字を探す
     if (!fields.accountNumber) {
-      const sevenDigitPattern = /\b([0-9]{7})\b/
-      const match = text.match(sevenDigitPattern)
+      const accountNumberPattern = /\b([0-9]{6,10})\b/
+      const match = text.match(accountNumberPattern)
       if (match) {
         fields.accountNumber = {
           value: match[1],

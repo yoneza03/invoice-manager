@@ -53,6 +53,24 @@ export default function InvoiceImport() {
   const [extractedData, setExtractedData] = useState<InvoiceData | null>(null)
   const [ocrConfidence, setOcrConfidence] = useState<number>(0)
   const [hasShownToast, setHasShownToast] = useState<boolean>(false)
+  const [formData, setFormData] = useState({
+    invoiceNumber: '',
+    issueDate: '',
+    transactionDate: '',
+    currency: 'JPY',
+    subject: '',
+    orderNumber: '',
+    billingToDepartment: '',
+    billingToContactPerson: '',
+    dueDate: '',
+    paymentCondition: '',
+    bankName: '',
+    branchName: '',
+    accountType: '',
+    accountNumber: '',
+    accountHolder: '',
+    feeBearer: '',
+  })
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     // ファイルを追加
@@ -408,6 +426,42 @@ export default function InvoiceImport() {
 
     console.log('[applyExtractedDataToForm] フォームへの自動入力完了', updatedInvoice);
   }, [selectedFile]);
+  /**
+   * OCR で抽出したデータを formData に反映する関数
+   * UI はまだ更新しないため、formData の setFormData のみ行う
+   */
+  function applyExtractedDataToFormSimple(ocr: OCRResult) {
+    if (!ocr || !ocr.extractedFields) return;
+
+    const f = ocr.extractedFields;
+
+    setFormData(prev => ({
+      ...prev,
+
+      // --- 基本情報 ---
+      invoiceNumber: f.invoiceNumber?.value ?? prev.invoiceNumber,
+      issueDate: f.issueDate?.value ?? prev.issueDate,
+      transactionDate: f.issueDate?.value ?? prev.transactionDate,
+      currency: prev.currency,
+      subject: prev.subject,
+      orderNumber: prev.orderNumber,
+
+      // --- 請求先情報 ---
+      billingToDepartment: prev.billingToDepartment,
+      billingToContactPerson: prev.billingToContactPerson,
+
+      // --- 支払条件 ---
+      dueDate: f.dueDate?.value ?? prev.dueDate,
+      paymentCondition: prev.paymentCondition,
+      bankName: f.bankName?.value ?? "",
+      branchName: f.branchName?.value ?? "",
+      accountType: f.accountType?.value ?? prev.accountType,
+      accountNumber: f.accountNumber?.value ?? "",
+      accountHolder: f.accountHolder?.value ?? prev.accountHolder,
+      feeBearer: prev.feeBearer,
+    }));
+  }
+
 
   // extractedDataをフォームに自動入力（applyExtractedDataToForm関数を呼び出し）
   useEffect(() => {
@@ -421,7 +475,7 @@ export default function InvoiceImport() {
       // applyExtractedDataToForm関数を呼び出してフォームに反映
       applyExtractedDataToForm(extractedData)
     }
-  }, [extractedData, selectedFile?.file, applyExtractedDataToForm])
+  }, [extractedData, selectedFile?.file])
 
   const removeFile = (file: File) => {
     setImportedFiles((prev) => prev.filter((f) => f.file !== file))
