@@ -70,6 +70,7 @@ export default function InvoiceImport() {
     accountNumber: '',
     accountHolder: '',
     feeBearer: '',
+    taxRate: 0,
   })
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -435,6 +436,16 @@ export default function InvoiceImport() {
 
     const f = ocr.extractedFields;
 
+    // 税率の正規化: "10%" → 0.10
+    let normalizedTaxRate: number | undefined = undefined;
+    if (f.taxRate?.value) {
+      const taxRateStr = String(f.taxRate.value).replace(/%/g, '').trim();
+      const taxRateNum = parseFloat(taxRateStr);
+      if (!isNaN(taxRateNum)) {
+        normalizedTaxRate = taxRateNum / 100; // 10 → 0.10
+      }
+    }
+
     setFormData(prev => ({
       ...prev,
 
@@ -453,12 +464,14 @@ export default function InvoiceImport() {
       // --- 支払条件 ---
       dueDate: f.dueDate?.value ?? prev.dueDate,
       paymentCondition: prev.paymentCondition,
-      bankName: f.bankName?.value ?? "",
-      branchName: f.branchName?.value ?? "",
+      bankName: f.bankName?.value ?? prev.bankName,
+      branchName: f.branchName?.value ?? prev.branchName,
       accountType: f.accountType?.value ?? prev.accountType,
-      accountNumber: f.accountNumber?.value ?? "",
+      accountNumber: f.accountNumber?.value ?? prev.accountNumber,
       accountHolder: f.accountHolder?.value ?? prev.accountHolder,
       feeBearer: prev.feeBearer,
+      taxRate: normalizedTaxRate ?? prev.taxRate,
+
     }));
   }
 

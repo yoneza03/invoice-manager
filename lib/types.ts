@@ -61,6 +61,7 @@ export interface InvoiceAttachment {
   fileType: string
   fileSize: number
   uploadedAt: Date
+  base64Data?: string
 }
 
 // OCR結果
@@ -75,6 +76,7 @@ export interface OCRResult {
     total?: FieldExtraction
     subtotal?: FieldExtraction
     tax?: FieldExtraction
+    taxRate?: FieldExtraction // 🆕 税率を追加
     bankName?: FieldExtraction
     branchName?: FieldExtraction
     accountType?: FieldExtraction

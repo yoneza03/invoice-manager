@@ -89,9 +89,9 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
       att => att.id === originalAttachmentId
     )
     
-    if (!originalAttachment) {
-      alert("元のPDFファイルが見つかりません")
-      return
+    if (!originalAttachment || !originalAttachment.base64Data) {
+      alert("元のPDFファイルが見つかりません");
+      return;
     }
     
     // Base64データをBlobに変換
