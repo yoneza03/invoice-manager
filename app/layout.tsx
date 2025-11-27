@@ -4,6 +4,7 @@ import './globals.css'
 import { StoreProvider } from '@/lib/store'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
+import { AuthGuard } from '@/components/auth-guard'
 
 export const metadata: Metadata = {
   title: '請求書管理システム | Invoice Management System',
@@ -21,7 +22,9 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <StoreProvider>
-            {children}
+            <AuthGuard>
+              {children}
+            </AuthGuard>
             <Analytics />
           </StoreProvider>
           <Toaster />

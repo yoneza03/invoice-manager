@@ -1,7 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import { Invoice, Client, Settings, Payment, InvoiceStatus } from "./types"
+import { Invoice, Client, Settings, Payment, InvoiceStatus, User, LoginCredentials, AuthState } from "./types"
 import { mockInvoices, mockClients, mockSettings, mockPayments } from "./mock-data"
 import { migrateInvoiceStorage } from "./migration"
 
@@ -10,6 +10,7 @@ interface StoreContextType {
   clients: Client[]
   settings: Settings
   payments: Payment[]
+  authState: AuthState
   addInvoice: (invoice: Invoice) => void
   updateInvoice: (id: string, invoice: Partial<Invoice>) => void
   deleteInvoice: (id: string) => void
@@ -20,6 +21,8 @@ interface StoreContextType {
   addPayment: (payment: Payment) => void
   getInvoiceById: (id: string) => Invoice | undefined
   getClientById: (id: string) => Client | undefined
+  login: (credentials: LoginCredentials) => Promise<boolean>
+  logout: () => void
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined)
@@ -29,9 +32,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useState<Client[]>(mockClients)
   const [settings, setSettings] = useState<Settings>(mockSettings)
   const [payments, setPayments] = useState<Payment[]>(mockPayments)
+  const [authState, setAuthState] = useState<AuthState>({
+    isAuthenticated: false,
+    user: null,
+    loading: true,
+  })
 
   // LocalStorageからデータを読み込む
   useEffect(() => {
+    // 認証状態を復元
+    const savedUser = localStorage.getItem("user")
+    if (savedUser) {
+      setAuthState({
+        isAuthenticated: true,
+        user: JSON.parse(savedUser),
+        loading: false,
+      })
+    } else {
+      setAuthState(prev => ({ ...prev, loading: false }))
+    }
     // マイグレーション処理を実行
     const migrated = localStorage.getItem('storage_migrated_v1')
     if (!migrated) {
@@ -113,6 +132,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return clients.find((client: Client) => client.id === id)
   }
 
+  const login = async (credentials: LoginCredentials): Promise<boolean> => {
+    setAuthState(prev => ({ ...prev, loading: true }))
+    
+    // デモ用の認証ロジック（実際はバックエンドAPIを呼び出す）
+    // デモユーザー: email: demo@example.com, password: demo123
+    if (credentials.email === "demo@example.com" && credentials.password === "demo123") {
+      const user: User = {
+        id: "user-1",
+        email: credentials.email,
+        name: "デモユーザー",
+        createdAt: new Date(),
+        lastLogin: new Date(),
+      }
+      
+      localStorage.setItem("user", JSON.stringify(user))
+      setAuthState({
+        isAuthenticated: true,
+        user,
+        loading: false,
+      })
+      return true
+    }
+    
+    setAuthState(prev => ({ ...prev, loading: false }))
+    return false
+  }
+
+  const logout = () => {
+    localStorage.removeItem("user")
+    setAuthState({
+      isAuthenticated: false,
+      user: null,
+      loading: false,
+    })
+  }
+
   return (
     <StoreContext.Provider
       value={{
@@ -120,6 +175,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         clients,
         settings,
         payments,
+        authState,
         addInvoice,
         updateInvoice,
         deleteInvoice,
@@ -130,6 +186,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         addPayment,
         getInvoiceById,
         getClientById,
+        login,
+        logout,
       }}
     >
       {children}

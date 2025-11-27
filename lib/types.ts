@@ -698,3 +698,35 @@ export interface InvoiceData {
    */
   ocrData?: OCRResult
 }
+
+// ========================================
+// ユーザー認証型定義
+// ========================================
+
+/**
+ * ユーザー情報
+ */
+export interface User {
+  id: string
+  email: string
+  name: string
+  createdAt: Date
+  lastLogin?: Date
+}
+
+/**
+ * ログイン情報
+ */
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+/**
+ * 認証状態
+ */
+export interface AuthState {
+  isAuthenticated: boolean
+  user: User | null
+  loading: boolean
+}
