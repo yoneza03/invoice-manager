@@ -7,13 +7,14 @@ import { formatCurrency, formatDate } from "@/lib/api"
 import { InvoiceStatus } from "@/lib/types"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
 import { useToast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface InvoiceListEnhancedProps {
   onNavigate: (page: string, invoiceId?: string) => void
 }
 
 export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedProps) {
-  const { invoices, deleteInvoice, settings } = useStore()
+  const { invoices, deleteInvoice, settings, updateInvoiceStatus } = useStore()
   const { toast } = useToast()
   const [filter, setFilter] = useState<string>("all")
 
@@ -63,15 +64,34 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
     switch (status) {
       case "paid":
         return "支払済み"
-      case "pending":
+      case "unpaid":
         return "未払い"
       case "overdue":
         return "期限切れ"
-      case "imported":
-        return "インポート"
       default:
         return "下書き"
     }
+  }
+
+  const getStatusBadgeColor = (status: InvoiceStatus) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-100 text-green-800"
+      case "unpaid":
+        return "bg-yellow-100 text-yellow-800"
+      case "overdue":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const handleStatusChange = (invoiceId: string, newStatus: InvoiceStatus, invoiceNumber: string) => {
+    updateInvoiceStatus(invoiceId, newStatus)
+    toast({
+      title: "ステータス更新",
+      description: `請求書 ${invoiceNumber} のステータスを ${getStatusText(newStatus)} に変更しました`,
+    })
   }
 
   return (
@@ -88,7 +108,7 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
 
       {/* Filters */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {["all", "paid", "pending", "overdue", "imported"].map((status) => (
+        {["all", "paid", "unpaid", "overdue", "draft"].map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -100,11 +120,11 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
               ? "すべて"
               : status === "paid"
                 ? "支払済み"
-                : status === "pending"
+                : status === "unpaid"
                   ? "未払い"
                   : status === "overdue"
                     ? "期限切れ"
-                    : "インポート"}
+                    : "下書き"}
           </button>
         ))}
       </div>
@@ -131,21 +151,20 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                   <td className="py-4 px-6 text-sm text-foreground">{invoice.client.name}</td>
                   <td className="py-4 px-6 text-sm font-semibold text-foreground">{formatCurrency(invoice.total)}</td>
                   <td className="py-4 px-6 text-sm">
-                    <span
-                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                        invoice.status === "paid"
-                          ? "bg-green-100 text-green-800"
-                          : invoice.status === "pending"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : invoice.status === "overdue"
-                              ? "bg-red-100 text-red-800"
-                              : invoice.status === "imported"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-gray-100 text-gray-800"
-                      }`}
+                    <Select
+                      value={invoice.status}
+                      onValueChange={(value) => handleStatusChange(invoice.id, value as InvoiceStatus, invoice.invoiceNumber)}
                     >
-                      {getStatusText(invoice.status)}
-                    </span>
+                      <SelectTrigger className={`w-[140px] ${getStatusBadgeColor(invoice.status)} border-0 font-semibold`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">下書き</SelectItem>
+                        <SelectItem value="unpaid">未払い</SelectItem>
+                        <SelectItem value="paid">支払済み</SelectItem>
+                        <SelectItem value="overdue">期限切れ</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </td>
                   <td className="py-4 px-6 text-sm text-muted-foreground">{formatDate(invoice.issueDate)}</td>
                   <td className="py-4 px-6 text-sm text-muted-foreground">{formatDate(invoice.dueDate)}</td>

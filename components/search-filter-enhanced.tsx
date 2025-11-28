@@ -77,7 +77,7 @@ export default function SearchFilterEnhanced({ onNavigate }: SearchFilterEnhance
     switch (status) {
       case "paid":
         return "bg-green-100 text-green-800"
-      case "pending":
+      case "unpaid":
         return "bg-yellow-100 text-yellow-800"
       case "overdue":
         return "bg-red-100 text-red-800"
@@ -90,7 +90,7 @@ export default function SearchFilterEnhanced({ onNavigate }: SearchFilterEnhance
     switch (status) {
       case "paid":
         return "支払済み"
-      case "pending":
+      case "unpaid":
         return "未払い"
       case "overdue":
         return "期限切れ"
@@ -145,7 +145,7 @@ export default function SearchFilterEnhanced({ onNavigate }: SearchFilterEnhance
             <div>
               <label className="block text-sm font-medium text-foreground mb-3">ステータス</label>
               <div className="space-y-2">
-                {(["paid", "pending", "overdue"] as InvoiceStatus[]).map((status) => (
+                {(["paid", "unpaid", "overdue", "draft"] as InvoiceStatus[]).map((status) => (
                   <label key={status} className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"

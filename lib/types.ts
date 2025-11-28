@@ -1,5 +1,5 @@
 // 請求書のステータス
-export type InvoiceStatus = "paid" | "pending" | "overdue" | "draft" | "imported"
+export type InvoiceStatus = "paid" | "unpaid" | "overdue" | "draft"
 
 // 請求書のデータソース
 export type InvoiceSource = "manual" | "pdf_import" | "image_import"
@@ -729,4 +729,103 @@ export interface AuthState {
   isAuthenticated: boolean
   user: User | null
   loading: boolean
+}
+
+// ========================================
+// 請求書テンプレート型定義
+// ========================================
+
+/**
+ * 請求書テンプレート
+ *
+ * 頻繁に使用する請求書の雛形を保存するための型定義。
+ * 明細行、税率、金額計算をテンプレート化し、
+ * 請求書作成時に素早く適用できるようにする。
+ */
+export interface InvoiceTemplate {
+  /**
+   * テンプレートID
+   * UUID v4 形式
+   */
+  id: string
+
+  /**
+   * ユーザーID
+   * このテンプレートの所有者
+   */
+  userId: string
+
+  /**
+   * テンプレート名（必須）
+   * 例: "月次定額サービス", "Web制作標準プラン"
+   */
+  name: string
+
+  /**
+   * 説明文（任意）
+   * テンプレートの用途や注意事項
+   */
+  description?: string
+
+  /**
+   * 請求書明細（配列）
+   * テンプレート化する明細行
+   */
+  items: InvoiceLineItem[]
+
+  /**
+   * 小計（税抜金額）
+   */
+  subtotal: number
+
+  /**
+   * 税率（%）
+   */
+  taxRate: number
+
+  /**
+   * 税額
+   */
+  taxAmount: number
+
+  /**
+   * 合計金額（税込）
+   */
+  totalAmount: number
+
+  /**
+   * 作成日時
+   */
+  createdAt: Date
+
+  /**
+   * 更新日時
+   */
+  updatedAt: Date
+}
+
+/**
+ * テンプレート作成リクエスト
+ */
+export interface CreateInvoiceTemplateRequest {
+  name: string
+  description?: string
+  items: InvoiceLineItem[]
+  subtotal: number
+  taxRate: number
+  taxAmount: number
+  totalAmount: number
+}
+
+/**
+ * テンプレート更新リクエスト
+ */
+export interface UpdateInvoiceTemplateRequest {
+  name?: string
+  description?: string
+  items?: InvoiceLineItem[]
+  subtotal?: number
+  taxRate?: number
+  taxAmount?: number
+  totalAmount?: number
 }

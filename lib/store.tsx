@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Invoice, Client, Settings, Payment, InvoiceStatus, User, LoginCredentials, AuthState } from "./types"
 import { mockInvoices, mockClients, mockSettings, mockPayments } from "./mock-data"
 import { migrateInvoiceStorage } from "./migration"
+import { updateInvoiceStatus as apiUpdateInvoiceStatus } from "./api"
 
 interface StoreContextType {
   invoices: Invoice[]
@@ -23,6 +24,7 @@ interface StoreContextType {
   getClientById: (id: string) => Client | undefined
   login: (credentials: LoginCredentials) => Promise<boolean>
   logout: () => void
+  updateInvoiceStatus: (id: string, status: InvoiceStatus) => void
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined)
@@ -64,7 +66,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const savedSettings = localStorage.getItem("settings")
     const savedPayments = localStorage.getItem("payments")
 
-    if (savedInvoices) setInvoices(JSON.parse(savedInvoices))
+    if (savedInvoices) {
+      let invoiceList: Invoice[] = JSON.parse(savedInvoices)
+      
+      // 自動的にoverdueステータスを判定・更新
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      let hasUpdates = false
+      invoiceList = invoiceList.map(invoice => {
+        // dueDate < 今日 かつ status === "unpaid" の場合、自動的に "overdue" に更新
+        const dueDate = new Date(invoice.dueDate)
+        dueDate.setHours(0, 0, 0, 0)
+        
+        if (dueDate < today && invoice.status === "unpaid") {
+          hasUpdates = true
+          console.log(`[Store] 請求書 ${invoice.invoiceNumber} を自動的に overdue に更新`)
+          return {
+            ...invoice,
+            status: "overdue" as InvoiceStatus,
+            updatedAt: new Date(),
+          }
+        }
+        return invoice
+      })
+      
+      // 更新があった場合はLocalStorageに保存
+      if (hasUpdates) {
+        localStorage.setItem("invoices", JSON.stringify(invoiceList))
+      }
+      
+      setInvoices(invoiceList)
+    }
     if (savedClients) setClients(JSON.parse(savedClients))
     if (savedSettings) setSettings(JSON.parse(savedSettings))
     if (savedPayments) setPayments(JSON.parse(savedPayments))
@@ -168,6 +201,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  const updateInvoiceStatus = (id: string, status: InvoiceStatus) => {
+    const updatedInvoice = apiUpdateInvoiceStatus(id, status)
+    if (updatedInvoice) {
+      // ストアの状態を更新
+      setInvoices(invoices.map((inv: Invoice) => (inv.id === id ? updatedInvoice : inv)))
+    }
+  }
+
   return (
     <StoreContext.Provider
       value={{
@@ -188,6 +229,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         getClientById,
         login,
         logout,
+        updateInvoiceStatus,
       }}
     >
       {children}

@@ -253,7 +253,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
                 <p className="font-semibold text-foreground">{formatCurrency(invoice.subtotal)}</p>
               </div>
               <div className="flex justify-between py-3 border-b border-border mb-3">
-                <p className="text-muted-foreground">消費税（{(invoice.taxRate * 100).toFixed(0)}%）</p>
+                <p className="text-muted-foreground">消費税（{(invoice.taxRate > 1 ? invoice.taxRate : invoice.taxRate * 100).toFixed(0)}%）</p>
                 <p className="font-semibold text-foreground">{formatCurrency(invoice.tax)}</p>
               </div>
               <div className="flex justify-between py-3">

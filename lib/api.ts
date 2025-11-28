@@ -37,7 +37,53 @@ export function determineInvoiceStatus(invoice: Invoice): InvoiceStatus {
     return "overdue"
   }
 
-  return "pending"
+  return "unpaid"
+}
+
+/**
+ * 請求書のステータスを更新
+ * @param id 請求書ID
+ * @param status 新しいステータス
+ * @returns 更新された請求書、またはundefined（見つからない場合）
+ */
+export function updateInvoiceStatus(id: string, status: InvoiceStatus): Invoice | undefined {
+  try {
+    // LocalStorageから請求書データを取得
+    const invoicesJson = localStorage.getItem('invoices')
+    if (!invoicesJson) {
+      console.error('[updateInvoiceStatus] 請求書データが見つかりません')
+      return undefined
+    }
+
+    const invoices: Invoice[] = JSON.parse(invoicesJson)
+    
+    // 指定されたIDの請求書を検索
+    const invoiceIndex = invoices.findIndex(inv => inv.id === id)
+    if (invoiceIndex === -1) {
+      console.error(`[updateInvoiceStatus] ID ${id} の請求書が見つかりません`)
+      return undefined
+    }
+
+    // ステータスを更新
+    const updatedInvoice = {
+      ...invoices[invoiceIndex],
+      status,
+      updatedAt: new Date(),
+    }
+
+    // 配列を更新
+    invoices[invoiceIndex] = updatedInvoice
+
+    // LocalStorageに保存
+    localStorage.setItem('invoices', JSON.stringify(invoices))
+
+    console.log(`[updateInvoiceStatus] 請求書 ${updatedInvoice.invoiceNumber} のステータスを ${status} に更新しました`)
+    return updatedInvoice
+
+  } catch (error) {
+    console.error('[updateInvoiceStatus] エラーが発生しました:', error)
+    return undefined
+  }
 }
 
 // 請求書をフィルタリング
@@ -101,7 +147,7 @@ export function calculateDashboardStats(invoices: Invoice[]): DashboardStats {
         stats.paidAmount += invoice.total
         stats.paidCount++
         break
-      case "pending":
+      case "unpaid":
         stats.pendingAmount += invoice.total
         stats.pendingCount++
         break
@@ -131,7 +177,7 @@ export function calculateMonthlyData(invoices: Invoice[]) {
       case "paid":
         monthlyData[monthKey].paid += invoice.total
         break
-      case "pending":
+      case "unpaid":
         monthlyData[monthKey].pending += invoice.total
         break
       case "overdue":
@@ -178,7 +224,7 @@ export function sortInvoices(invoices: Invoice[], sortBy: "date" | "amount" | "s
       case "amount":
         return b.total - a.total
       case "status":
-        const statusOrder: Record<InvoiceStatus, number> = { paid: 0, pending: 1, overdue: 2, draft: 3, imported: 4 }
+        const statusOrder: Record<InvoiceStatus, number> = { paid: 0, unpaid: 1, overdue: 2, draft: 3 }
         return statusOrder[a.status] - statusOrder[b.status]
       default:
         return 0

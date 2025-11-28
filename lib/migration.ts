@@ -1,11 +1,12 @@
 /**
  * LocalStorage最適化マイグレーション
- * 
+ *
  * 既存のLocalStorageに保存されている請求書データから
  * base64Dataフィールドを削除し、容量を最適化します。
+ * また、ステータスフィールドのマイグレーションも行います。
  */
 
-import { Invoice, InvoiceAttachment } from './types'
+import { Invoice, InvoiceAttachment, InvoiceStatus } from './types'
 
 /**
  * 請求書ストレージのマイグレーションを実行
@@ -34,9 +35,36 @@ export async function migrateInvoiceStorage(): Promise<void> {
     let attachmentCount = 0
     let savedSize = 0
     let migratedInvoiceCount = 0
+    let statusMigrationCount = 0
     
     // 各請求書を処理
     const migratedInvoices = invoices.map(invoice => {
+      let needsMigration = false
+      let migratedInvoice = { ...invoice }
+      
+      // ステータスマイグレーション: "imported" → "draft", "pending" → "unpaid"
+      const oldStatus = invoice.status as any
+      if (oldStatus === 'imported' || oldStatus === 'pending') {
+        needsMigration = true
+        statusMigrationCount++
+        
+        if (oldStatus === 'imported') {
+          migratedInvoice.status = 'draft' as InvoiceStatus
+          console.log(`[Migration] ステータス変換: ${invoice.invoiceNumber} - "imported" → "draft"`)
+        } else if (oldStatus === 'pending') {
+          migratedInvoice.status = 'unpaid' as InvoiceStatus
+          console.log(`[Migration] ステータス変換: ${invoice.invoiceNumber} - "pending" → "unpaid"`)
+        }
+      }
+      
+      // statusフィールドが存在しない場合はデフォルト値として "draft" を設定
+      if (!invoice.status) {
+        needsMigration = true
+        statusMigrationCount++
+        migratedInvoice.status = 'draft' as InvoiceStatus
+        console.log(`[Migration] ステータス追加: ${invoice.invoiceNumber} - デフォルト "draft"`)
+      }
+      
       // 添付ファイルが存在しない場合はスキップ
       if (!invoice.attachments || invoice.attachments.length === 0) {
         return invoice
@@ -65,29 +93,37 @@ export async function migrateInvoiceStorage(): Promise<void> {
         return attachment
       })
       
-      // base64Dataが存在した請求書のみ更新
+      // base64Dataが存在した場合
       if (hasBase64Data) {
+        needsMigration = true
         migratedInvoiceCount++
-        return {
-          ...invoice,
+        migratedInvoice = {
+          ...migratedInvoice,
           attachments: migratedAttachments,
           pdfStorageLocation: invoice.pdfStorageLocation || ('none' as const),
         }
       }
       
-      return invoice
+      return needsMigration ? migratedInvoice : invoice
     })
     
     // マイグレーションが必要な場合のみLocalStorageを更新
-    if (migratedInvoiceCount > 0) {
+    if (migratedInvoiceCount > 0 || statusMigrationCount > 0) {
       localStorage.setItem('invoices', JSON.stringify(migratedInvoices))
       
       // 削減容量をMB単位で計算
       const savedSizeMB = (savedSize / (1024 * 1024)).toFixed(2)
       
-      console.log(`[Migration] ${migratedInvoiceCount}件の請求書を最適化`)
-      console.log(`[Migration] ${attachmentCount}件の添付ファイルからbase64Dataを削除`)
-      console.log(`[Migration] 削減容量: ${savedSizeMB}MB`)
+      if (migratedInvoiceCount > 0) {
+        console.log(`[Migration] ${migratedInvoiceCount}件の請求書を最適化`)
+        console.log(`[Migration] ${attachmentCount}件の添付ファイルからbase64Dataを削除`)
+        console.log(`[Migration] 削減容量: ${savedSizeMB}MB`)
+      }
+      
+      if (statusMigrationCount > 0) {
+        console.log(`[Migration] ${statusMigrationCount}件の請求書ステータスを更新`)
+      }
+      
       console.log('[Migration] マイグレーション完了')
     } else {
       console.log('[Migration] マイグレーション対象のデータが見つかりませんでした')

@@ -252,7 +252,7 @@ const InvoicePDF = ({ invoice, companyInfo }: { invoice: Invoice; companyInfo: a
             <Text>{formatCurrency(invoice.subtotal)}</Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text>消費税 ({(invoice.taxRate * 100).toFixed(0)}%):</Text>
+            <Text>消費税 ({(invoice.taxRate > 1 ? invoice.taxRate : invoice.taxRate * 100).toFixed(0)}%):</Text>
             <Text>{formatCurrency(invoice.tax)}</Text>
           </View>
           <View style={[styles.summaryRow, styles.summaryTotal]}>

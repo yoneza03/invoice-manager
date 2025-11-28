@@ -1,7 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { FileText, Home, DollarSign, Search, Settings, Menu, X, ChevronRight, Upload, Users } from "lucide-react"
+import { FileText, Home, DollarSign, Search, Settings, Menu, X, ChevronRight, Upload, Users, LogOut, User } from "lucide-react"
+import { useStore } from "@/lib/store"
+import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients"
 
@@ -11,6 +24,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+  const { logout, authState } = useStore()
   const [isOpen, setIsOpen] = useState(true)
 
   const menuItems = [
@@ -72,12 +86,50 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           </nav>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-sidebar-border bg-gradient-to-t from-sidebar to-transparent">
-          <div className="text-xs text-sidebar-foreground/60">
-            <p className="font-semibold">企業情報</p>
-            <p className="mt-1">v0 Inc.</p>
-            <p className="text-10px">2024</p>
-          </div>
+        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-sidebar-border bg-sidebar space-y-4">
+          {/* ユーザー情報 */}
+          {authState.user && (
+            <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-sidebar-accent/50">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <User size={16} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {authState.user.name}
+                </p>
+                <p className="text-xs text-sidebar-foreground/60 truncate">
+                  {authState.user.email}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ログアウトボタン */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-3 text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent"
+              >
+                <LogOut size={20} />
+                <span className="font-medium">ログアウト</span>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>ログアウトしますか？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  ログアウトすると、ログイン画面に戻ります。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction onClick={logout}>
+                  ログアウト
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
