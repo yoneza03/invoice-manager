@@ -1,4 +1,13 @@
-import { Invoice, InvoiceStatus, SearchFilters, DashboardStats } from "./types"
+import {
+  Invoice,
+  InvoiceStatus,
+  SearchFilters,
+  DashboardStats,
+  InvoiceTemplate,
+  CreateInvoiceTemplateRequest,
+  UpdateInvoiceTemplateRequest,
+  InvoiceLineItem
+} from "./types"
 
 // 請求書番号を生成
 export function generateInvoiceNumber(): string {
@@ -261,4 +270,186 @@ export function validateRegistrationNumber(
   }
   
   return { valid: true }
+}
+
+// ========================================
+// 請求書テンプレート管理API
+// ========================================
+
+/**
+ * テンプレート一覧を取得
+ * @param userId ユーザーID
+ * @returns テンプレート配列
+ */
+export async function getInvoiceTemplates(userId: string): Promise<InvoiceTemplate[]> {
+  try {
+    // TODO: Supabaseから取得する実装に置き換え
+    const templatesJson = localStorage.getItem(`invoice_templates_${userId}`)
+    if (!templatesJson) {
+      return []
+    }
+    
+    const templates = JSON.parse(templatesJson)
+    // Date型に変換
+    return templates.map((t: any) => ({
+      ...t,
+      createdAt: new Date(t.createdAt),
+      updatedAt: new Date(t.updatedAt)
+    }))
+  } catch (error) {
+    console.error('[getInvoiceTemplates] エラーが発生しました:', error)
+    return []
+  }
+}
+
+/**
+ * テンプレートを作成
+ * @param userId ユーザーID
+ * @param data テンプレート作成データ
+ * @returns 作成されたテンプレート
+ */
+export async function createInvoiceTemplate(
+  userId: string,
+  data: CreateInvoiceTemplateRequest
+): Promise<InvoiceTemplate> {
+  try {
+    const newTemplate: InvoiceTemplate = {
+      id: generateId('template'),
+      userId,
+      name: data.name,
+      description: data.description,
+      items: data.items,
+      subtotal: data.subtotal,
+      taxRate: data.taxRate,
+      taxAmount: data.taxAmount,
+      totalAmount: data.totalAmount,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    // TODO: Supabaseに保存する実装に置き換え
+    const templates = await getInvoiceTemplates(userId)
+    templates.push(newTemplate)
+    localStorage.setItem(`invoice_templates_${userId}`, JSON.stringify(templates))
+
+    console.log(`[createInvoiceTemplate] テンプレート「${newTemplate.name}」を作成しました`)
+    return newTemplate
+  } catch (error) {
+    console.error('[createInvoiceTemplate] エラーが発生しました:', error)
+    throw error
+  }
+}
+
+/**
+ * テンプレートを更新
+ * @param userId ユーザーID
+ * @param templateId テンプレートID
+ * @param data 更新データ
+ * @returns 更新されたテンプレート、または undefined（見つからない場合）
+ */
+export async function updateInvoiceTemplate(
+  userId: string,
+  templateId: string,
+  data: UpdateInvoiceTemplateRequest
+): Promise<InvoiceTemplate | undefined> {
+  try {
+    // TODO: Supabaseで更新する実装に置き換え
+    const templates = await getInvoiceTemplates(userId)
+    const templateIndex = templates.findIndex(t => t.id === templateId)
+    
+    if (templateIndex === -1) {
+      console.error(`[updateInvoiceTemplate] ID ${templateId} のテンプレートが見つかりません`)
+      return undefined
+    }
+
+    const updatedTemplate: InvoiceTemplate = {
+      ...templates[templateIndex],
+      ...data,
+      updatedAt: new Date()
+    }
+
+    templates[templateIndex] = updatedTemplate
+    localStorage.setItem(`invoice_templates_${userId}`, JSON.stringify(templates))
+
+    console.log(`[updateInvoiceTemplate] テンプレート「${updatedTemplate.name}」を更新しました`)
+    return updatedTemplate
+  } catch (error) {
+    console.error('[updateInvoiceTemplate] エラーが発生しました:', error)
+    throw error
+  }
+}
+
+/**
+ * テンプレートを削除
+ * @param userId ユーザーID
+ * @param templateId テンプレートID
+ * @returns 削除成功したか
+ */
+export async function deleteInvoiceTemplate(
+  userId: string,
+  templateId: string
+): Promise<boolean> {
+  try {
+    // TODO: Supabaseで削除する実装に置き換え
+    const templates = await getInvoiceTemplates(userId)
+    const filteredTemplates = templates.filter(t => t.id !== templateId)
+    
+    if (filteredTemplates.length === templates.length) {
+      console.error(`[deleteInvoiceTemplate] ID ${templateId} のテンプレートが見つかりません`)
+      return false
+    }
+
+    localStorage.setItem(`invoice_templates_${userId}`, JSON.stringify(filteredTemplates))
+    console.log(`[deleteInvoiceTemplate] テンプレート ID ${templateId} を削除しました`)
+    return true
+  } catch (error) {
+    console.error('[deleteInvoiceTemplate] エラーが発生しました:', error)
+    return false
+  }
+}
+
+/**
+ * テンプレートIDから取得
+ * @param userId ユーザーID
+ * @param templateId テンプレートID
+ * @returns テンプレート、または undefined（見つからない場合）
+ */
+export async function getInvoiceTemplateById(
+  userId: string,
+  templateId: string
+): Promise<InvoiceTemplate | undefined> {
+  try {
+    const templates = await getInvoiceTemplates(userId)
+    return templates.find(t => t.id === templateId)
+  } catch (error) {
+    console.error('[getInvoiceTemplateById] エラーが発生しました:', error)
+    return undefined
+  }
+}
+
+/**
+ * 請求書からテンプレートを作成
+ * @param userId ユーザーID
+ * @param invoice 請求書データ
+ * @param templateName テンプレート名
+ * @param description 説明（オプション）
+ * @returns 作成されたテンプレート
+ */
+export async function createTemplateFromInvoice(
+  userId: string,
+  invoice: Invoice,
+  templateName: string,
+  description?: string
+): Promise<InvoiceTemplate> {
+  const templateData: CreateInvoiceTemplateRequest = {
+    name: templateName,
+    description,
+    items: invoice.lineItems,
+    subtotal: invoice.subtotal,
+    taxRate: invoice.taxRate,
+    taxAmount: invoice.tax,
+    totalAmount: invoice.total
+  }
+
+  return await createInvoiceTemplate(userId, templateData)
 }

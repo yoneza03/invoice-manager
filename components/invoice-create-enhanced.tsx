@@ -1,10 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronLeft, Plus, Trash2 } from "lucide-react"
+import { ChevronLeft, Plus, Trash2, FileText } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { generateInvoiceNumber, generateId, calculateTax, calculateTotal } from "@/lib/api"
-import { Invoice, InvoiceLineItem, Client } from "@/lib/types"
+import { getInvoiceTemplates } from "@/lib/api/templates"
+import { Invoice, InvoiceLineItem, Client, InvoiceTemplate } from "@/lib/types"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
 
 interface InvoiceCreateEnhancedProps {
   onNavigate: (page: string) => void
@@ -20,6 +33,7 @@ interface LineItem {
 
 export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: InvoiceCreateEnhancedProps) {
   const { addInvoice, updateInvoice, getInvoiceById, clients, settings } = useStore()
+  const { toast } = useToast()
   
   const [selectedClient, setSelectedClient] = useState<string>("")
   const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().split("T")[0])
@@ -29,6 +43,46 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
   ])
   const [notes, setNotes] = useState<string>("")
   const [isEditMode, setIsEditMode] = useState<boolean>(false)
+  
+  // テンプレート管理用の状態
+  const [templates, setTemplates] = useState<InvoiceTemplate[]>([])
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+
+  // 認証ユーザーIDを取得
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserId(user.id)
+      }
+    }
+    fetchUserId()
+  }, [])
+
+  // テンプレート一覧を読み込み
+  useEffect(() => {
+    if (userId) {
+      loadTemplates()
+    }
+  }, [userId])
+
+  const loadTemplates = async () => {
+    if (!userId) return
+    
+    try {
+      const data = await getInvoiceTemplates(userId)
+      setTemplates(data)
+    } catch (error) {
+      console.error("テンプレート読み込みエラー:", error)
+      toast({
+        title: "エラー",
+        description: "テンプレートの読み込みに失敗しました",
+        variant: "destructive",
+      })
+    }
+  }
 
   // 編集モードの場合、請求書データを読み込む
   useEffect(() => {
@@ -73,6 +127,39 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
     )
   }
 
+  // テンプレートを適用
+  const applyTemplate = (template: InvoiceTemplate) => {
+    // バリデーション: 明細が1つもない場合はエラー
+    if (!template.items || template.items.length === 0) {
+      toast({
+        title: "エラー",
+        description: "このテンプレートには明細がありません",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // テンプレートの明細をコピー
+    const templateItems: LineItem[] = template.items.map((item) => ({
+      id: generateId("item"),
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    }))
+    
+    // フォームに適用
+    setItems(templateItems)
+    
+    // ダイアログを閉じる
+    setIsTemplateDialogOpen(false)
+    
+    // 成功メッセージ
+    toast({
+      title: "テンプレートを適用しました",
+      description: `「${template.name}」の明細${template.items.length}件を読み込みました`,
+    })
+  }
+
   const calculateSubtotal = (): number => {
     return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
   }
@@ -80,18 +167,30 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
   const handleSubmit = () => {
     const client = clients.find((c) => c.id === selectedClient)
     if (!client) {
-      alert("顧客を選択してください")
+      toast({
+        title: "エラー",
+        description: "顧客を選択してください",
+        variant: "destructive",
+      })
       return
     }
 
     if (!issueDate || !dueDate) {
-      alert("発行日と期限日を入力してください")
+      toast({
+        title: "エラー",
+        description: "発行日と期限日を入力してください",
+        variant: "destructive",
+      })
       return
     }
 
     const hasEmptyItems = items.some((item) => !item.description || item.quantity <= 0 || item.unitPrice <= 0)
     if (hasEmptyItems) {
-      alert("すべての請求項目を正しく入力してください")
+      toast({
+        title: "エラー",
+        description: "すべての請求項目を正しく入力してください",
+        variant: "destructive",
+      })
       return
     }
 
@@ -121,7 +220,10 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
         notes: notes,
         updatedAt: new Date(),
       })
-      alert("請求書を更新しました")
+      toast({
+        title: "請求書を更新しました",
+        description: `請求書番号: ${getInvoiceById(invoiceId)?.invoiceNumber}`,
+      })
     } else {
       // 新規作成モード
       const newInvoice: Invoice = {
@@ -135,13 +237,16 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
         tax: tax,
         taxRate: settings.company.taxRate,
         total: total,
-        status: "pending",
+        status: "unpaid",
         notes: notes,
         createdAt: new Date(),
         updatedAt: new Date(),
       }
       addInvoice(newInvoice)
-      alert("請求書を作成しました")
+      toast({
+        title: "請求書を作成しました",
+        description: `請求書番号: ${newInvoice.invoiceNumber}`,
+      })
     }
     onNavigate("invoices")
   }
@@ -215,13 +320,69 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-foreground">請求項目</h3>
-              <button
-                onClick={addItem}
-                className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors text-sm"
-              >
-                <Plus size={18} />
-                項目追加
-              </button>
+              <div className="flex gap-2">
+                <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+                  <DialogTrigger asChild>
+                    <button
+                      className="flex items-center gap-2 px-3 py-2 border border-border text-foreground font-medium rounded-lg hover:bg-muted transition-colors text-sm"
+                    >
+                      <FileText size={18} />
+                      テンプレート
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>テンプレートを選択</DialogTitle>
+                      <DialogDescription>
+                        保存されたテンプレートから選択して請求書に適用できます
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                      {templates.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <FileText className="mx-auto h-12 w-12 mb-4 opacity-20" />
+                          <p>テンプレートがありません</p>
+                        </div>
+                      ) : (
+                        templates.map((template) => (
+                          <div
+                            key={template.id}
+                            className="border border-border rounded-lg p-4 hover:bg-muted transition-colors cursor-pointer"
+                            onClick={() => applyTemplate(template)}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-semibold text-foreground">{template.name}</h4>
+                                {template.description && (
+                                  <p className="text-sm text-muted-foreground">{template.description}</p>
+                                )}
+                              </div>
+                              <Badge variant="secondary">{template.items.length}件</Badge>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-muted-foreground">
+                                税率: {template.taxRate}%
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                ¥{template.totalAmount.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                
+                <button
+                  onClick={addItem}
+                  className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors text-sm"
+                >
+                  <Plus size={18} />
+                  項目追加
+                </button>
+              </div>
             </div>
             <div className="space-y-4">
               {items.map((item) => (

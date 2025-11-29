@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { FileText, Home, DollarSign, Search, Settings, Menu, X, ChevronRight, Upload, Users, LogOut, User } from "lucide-react"
+import { FileText, Home, DollarSign, Search, Settings, Menu, X, ChevronRight, Upload, Users, LogOut, User, FileStack } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,7 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
-type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients"
+type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients" | "templates"
 
 interface SidebarProps {
   currentPage: Page
@@ -32,6 +32,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     { id: "invoices", label: "請求書一覧", icon: FileText },
     { id: "create", label: "請求書作成", icon: FileText },
     { id: "import", label: "請求書インポート", icon: Upload },
+    { id: "templates", label: "テンプレート管理", icon: FileStack },
     { id: "clients", label: "取引先管理", icon: Users },
     { id: "payments", label: "支払管理", icon: DollarSign },
     { id: "search", label: "検索・フィルター", icon: Search },

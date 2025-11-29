@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Dashboard from "@/components/dashboard"
 import InvoiceListEnhanced from "@/components/invoice-list-enhanced"
 import InvoiceDetailEnhanced from "@/components/invoice-detail-enhanced"
@@ -12,9 +13,10 @@ import SettingsEnhanced from "@/components/settings-enhanced"
 import ClientManagement from "@/components/client-management"
 import Sidebar from "@/components/sidebar"
 
-type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients"
+type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients" | "templates"
 
 export default function Home() {
+  const router = useRouter()
   const [currentPage, setCurrentPage] = useState<Page>("dashboard")
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
@@ -24,6 +26,9 @@ export default function Home() {
       // 編集モードの場合はcreateページに遷移してinvoiceIdを渡す
       setCurrentPage("create")
       setEditingInvoiceId(invoiceId || null)
+    } else if (page === "templates") {
+      // テンプレート管理ページへ遷移（App Routerを使用）
+      router.push("/templates")
     } else {
       setCurrentPage(page as Page)
       setEditingInvoiceId(null)
