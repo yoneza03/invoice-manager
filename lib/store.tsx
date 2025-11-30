@@ -5,6 +5,7 @@ import { Invoice, Client, Settings, Payment, InvoiceStatus, User, LoginCredentia
 import { mockInvoices, mockClients, mockSettings, mockPayments } from "./mock-data"
 import { migrateInvoiceStorage } from "./migration"
 import { updateInvoiceStatus as apiUpdateInvoiceStatus } from "./api"
+import { createSupabaseBrowserClient } from "./supabase-browser"
 
 interface StoreContextType {
   invoices: Invoice[]
@@ -40,19 +41,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     loading: true,
   })
 
+  // 初期化処理
+  useEffect(() => {
+    // Supabase セッションから認証状態を復元
+    const supabase = createSupabaseBrowserClient()
+    
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setAuthState({
+          isAuthenticated: true,
+          user: {
+            id: session.user.id,
+            email: session.user.email || "",
+            name: session.user.user_metadata?.name || session.user.email || "ユーザー",
+            createdAt: new Date(session.user.created_at),
+            lastLogin: new Date(),
+          },
+          loading: false,
+        })
+      } else {
+        setAuthState(prev => ({ ...prev, loading: false }))
+      }
+    })
+
+    // セッション変更を監視
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setAuthState({
+          isAuthenticated: true,
+          user: {
+            id: session.user.id,
+            email: session.user.email || "",
+            name: session.user.user_metadata?.name || session.user.email || "ユーザー",
+            createdAt: new Date(session.user.created_at),
+            lastLogin: new Date(),
+          },
+          loading: false,
+        })
+      } else {
+        setAuthState({
+          isAuthenticated: false,
+          user: null,
+          loading: false,
+        })
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
   // LocalStorageからデータを読み込む
   useEffect(() => {
-    // 認証状態を復元
-    const savedUser = localStorage.getItem("user")
-    if (savedUser) {
-      setAuthState({
-        isAuthenticated: true,
-        user: JSON.parse(savedUser),
-        loading: false,
-      })
-    } else {
-      setAuthState(prev => ({ ...prev, loading: false }))
-    }
     // マイグレーション処理を実行
     const migrated = localStorage.getItem('storage_migrated_v1')
     if (!migrated) {
@@ -168,32 +209,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const login = async (credentials: LoginCredentials): Promise<boolean> => {
     setAuthState(prev => ({ ...prev, loading: true }))
     
-    // デモ用の認証ロジック（実際はバックエンドAPIを呼び出す）
-    // デモユーザー: email: demo@example.com, password: demo123
-    if (credentials.email === "demo@example.com" && credentials.password === "demo123") {
-      const user: User = {
-        id: "user-1",
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
-        name: "デモユーザー",
-        createdAt: new Date(),
-        lastLogin: new Date(),
-      }
-      
-      localStorage.setItem("user", JSON.stringify(user))
-      setAuthState({
-        isAuthenticated: true,
-        user,
-        loading: false,
+        password: credentials.password,
       })
-      return true
+
+      if (error) {
+        console.error("[Store] Supabase ログインエラー:", error)
+        setAuthState(prev => ({ ...prev, loading: false }))
+        return false
+      }
+
+      if (data.session?.user) {
+        const user: User = {
+          id: data.session.user.id,
+          email: data.session.user.email || "",
+          name: data.session.user.user_metadata?.name || data.session.user.email || "ユーザー",
+          createdAt: new Date(data.session.user.created_at),
+          lastLogin: new Date(),
+        }
+        
+        setAuthState({
+          isAuthenticated: true,
+          user,
+          loading: false,
+        })
+        return true
+      }
+
+      setAuthState(prev => ({ ...prev, loading: false }))
+      return false
+    } catch (err) {
+      console.error("[Store] ログイン処理エラー:", err)
+      setAuthState(prev => ({ ...prev, loading: false }))
+      return false
     }
-    
-    setAuthState(prev => ({ ...prev, loading: false }))
-    return false
   }
 
-  const logout = () => {
-    localStorage.removeItem("user")
+  const logout = async () => {
+    const supabase = createSupabaseBrowserClient()
+    await supabase.auth.signOut()
+    
     setAuthState({
       isAuthenticated: false,
       user: null,

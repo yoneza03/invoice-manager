@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TemplateEditor } from '@/components/templates/TemplateEditor';
-import { createInvoiceTemplate } from '@/lib/api/templates';
 import { CreateInvoiceTemplateRequest, UpdateInvoiceTemplateRequest } from '@/lib/types';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
@@ -50,7 +49,18 @@ export default function NewTemplatePage() {
   const handleCreate = async (input: CreateInvoiceTemplateRequest | UpdateInvoiceTemplateRequest) => {
     try {
       // createモードでは常にCreateInvoiceTemplateRequestが渡される
-      await createInvoiceTemplate(input as CreateInvoiceTemplateRequest);
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'テンプレートの作成に失敗しました');
+      }
       
       toast({
         title: '成功',
@@ -62,7 +72,7 @@ export default function NewTemplatePage() {
       console.error('テンプレート作成エラー:', error);
       toast({
         title: 'エラー',
-        description: 'テンプレートの作成に失敗しました',
+        description: error instanceof Error ? error.message : 'テンプレートの作成に失敗しました',
         variant: 'destructive',
       });
     }

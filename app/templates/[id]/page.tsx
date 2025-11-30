@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TemplateEditor } from '@/components/templates/TemplateEditor';
-import { getInvoiceTemplateById, updateInvoiceTemplate } from '@/lib/api/templates';
 import { InvoiceTemplate, UpdateInvoiceTemplateRequest } from '@/lib/types';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useToast } from '@/hooks/use-toast';
@@ -52,19 +51,21 @@ export default function EditTemplatePage({ params }: PageProps) {
           return;
         }
 
-        // テンプレートデータ取得
-        const templateData = await getInvoiceTemplateById(id);
+        // API経由でテンプレートデータ取得
+        const response = await fetch(`/api/templates/${id}`);
         
-        if (!templateData) {
+        if (!response.ok) {
+          const errorData = await response.json();
           toast({
             title: 'エラー',
-            description: 'テンプレートが見つかりません',
+            description: errorData.error || 'テンプレートが見つかりません',
             variant: 'destructive',
           });
           router.push('/templates');
           return;
         }
 
+        const templateData: InvoiceTemplate = await response.json();
         setTemplate(templateData);
       } catch (error) {
         console.error('テンプレート読み込みエラー:', error);
@@ -95,7 +96,18 @@ export default function EditTemplatePage({ params }: PageProps) {
     }
 
     try {
-      await updateInvoiceTemplate(id, input);
+      const response = await fetch(`/api/templates/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'テンプレートの更新に失敗しました');
+      }
       
       toast({
         title: '成功',
@@ -107,7 +119,7 @@ export default function EditTemplatePage({ params }: PageProps) {
       console.error('テンプレート更新エラー:', error);
       toast({
         title: 'エラー',
-        description: 'テンプレートの更新に失敗しました',
+        description: error instanceof Error ? error.message : 'テンプレートの更新に失敗しました',
         variant: 'destructive',
       });
     }

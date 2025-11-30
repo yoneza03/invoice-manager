@@ -48,7 +48,7 @@ function mapSupabaseToTemplate(row: SupabaseInvoiceTemplate): InvoiceTemplate {
  * ─────────────────────────────
  */
 export async function getInvoiceTemplates(userId: string): Promise<InvoiceTemplate[]> {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const { data, error } = await supabase
     .from("invoice_templates")
@@ -68,7 +68,7 @@ export async function getInvoiceTemplates(userId: string): Promise<InvoiceTempla
  * ─────────────────────────────
  */
 export async function getInvoiceTemplateById(id: string): Promise<InvoiceTemplate | null> {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const { data, error } = await supabase
     .from("invoice_templates")
@@ -76,7 +76,6 @@ export async function getInvoiceTemplateById(id: string): Promise<InvoiceTemplat
     .eq("id", id)
     .single()
 
-  // 見つからない場合
   if (error?.code === "PGRST116") return null
   if (error) throw new Error(`テンプレート取得エラー: ${error.message}`)
 
@@ -91,9 +90,8 @@ export async function getInvoiceTemplateById(id: string): Promise<InvoiceTemplat
 export async function createInvoiceTemplate(
   input: CreateInvoiceTemplateRequest
 ): Promise<InvoiceTemplate> {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
-  // 認証ユーザー取得
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error("認証されていません。ログインしてください。")
 
@@ -126,8 +124,7 @@ export async function updateInvoiceTemplate(
   id: string,
   input: UpdateInvoiceTemplateRequest
 ): Promise<InvoiceTemplate> {
-
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const updateData: Record<string, any> = {}
 
@@ -162,7 +159,7 @@ export async function updateInvoiceTemplate(
  * ─────────────────────────────
  */
 export async function deleteInvoiceTemplate(id: string): Promise<void> {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const { error } = await supabase
     .from("invoice_templates")

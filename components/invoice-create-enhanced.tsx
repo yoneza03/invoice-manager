@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { ChevronLeft, Plus, Trash2, FileText } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { generateInvoiceNumber, generateId, calculateTax, calculateTotal } from "@/lib/api"
-import { getInvoiceTemplates } from "@/lib/api/templates"
 import { Invoice, InvoiceLineItem, Client, InvoiceTemplate } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import {
@@ -72,13 +71,20 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
     if (!userId) return
     
     try {
-      const data = await getInvoiceTemplates(userId)
+      const response = await fetch("/api/templates")
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "テンプレートの読み込みに失敗しました")
+      }
+      
+      const data: InvoiceTemplate[] = await response.json()
       setTemplates(data)
     } catch (error) {
       console.error("テンプレート読み込みエラー:", error)
       toast({
         title: "エラー",
-        description: "テンプレートの読み込みに失敗しました",
+        description: error instanceof Error ? error.message : "テンプレートの読み込みに失敗しました",
         variant: "destructive",
       })
     }

@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
-import { getInvoiceTemplates, deleteInvoiceTemplate } from "@/lib/api/templates"
 import { InvoiceTemplate } from "@/lib/types"
 import {
   Card,
@@ -59,8 +58,15 @@ export default function TemplatesPage() {
         return
       }
 
-      // テンプレート一覧を取得
-      const data = await getInvoiceTemplates(user.id)
+      // API経由でテンプレート一覧を取得
+      const response = await fetch("/api/templates")
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "テンプレートの取得に失敗しました")
+      }
+      
+      const data: InvoiceTemplate[] = await response.json()
       setTemplates(data)
       setFilteredTemplates(data)
     } catch (error) {
@@ -105,7 +111,14 @@ export default function TemplatesPage() {
     if (!templateToDelete) return
 
     try {
-      await deleteInvoiceTemplate(templateToDelete)
+      const response = await fetch(`/api/templates/${templateToDelete}`, {
+        method: "DELETE",
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "テンプレートの削除に失敗しました")
+      }
       
       toast({
         title: "削除完了",

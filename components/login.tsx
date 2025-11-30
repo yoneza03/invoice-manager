@@ -81,10 +81,9 @@ export function Login() {
               />
             </div>
             <div className="bg-muted p-3 rounded-md text-sm">
-              <p className="font-medium mb-1">デモアカウント:</p>
+              <p className="font-medium mb-1">ログイン情報:</p>
               <p className="text-muted-foreground">
-                メール: demo@example.com<br />
-                パスワード: demo123
+                Supabase に登録されたアカウントでログインしてください
               </p>
             </div>
           </CardContent>
