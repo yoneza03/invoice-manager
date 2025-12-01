@@ -22,6 +22,8 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import { ja } from "date-fns/locale"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+
 
 async function calculateFileHash(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
@@ -501,24 +503,59 @@ export default function InvoiceImport() {
     }
   }
 
-  const confirmImport = (importedFile: ImportedFile) => {
-    if (!importedFile.result) return
+  const confirmImport = async (importedFile: ImportedFile) => {
+    if (!importedFile.result) return;
 
-    const { invoice } = importedFile.result
+    const { invoice } = importedFile.result;
 
-    // 新規顧客の場合は追加
-    if (invoice.client && !clients.find((c) => c.id === invoice.client!.id)) {
-      addClient(invoice.client)
+    // Supabase クライアント作成
+    const supabase = createSupabaseBrowserClient();
+
+    // ログイン中のユーザーID取得
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      toast({
+        title: "エラー",
+        description: "ログインユーザー情報が取得できませんでした。",
+        variant: "destructive",
+      });
+      return;
     }
 
-    // 請求書を追加
-    addInvoice(invoice as Invoice)
+    // 請求書を Supabase に保存
+    const { error } = await supabase.from("invoices").insert({
+      id: crypto.randomUUID(),
+      user_id: user.id,
+      invoice_number: invoice.invoiceNumber ?? "",
+      client_name: invoice.client?.name ?? "",
+      amount: invoice.total ?? 0,
+      status: "pending",
+      due_date: invoice.dueDate ?? null,
+      paid_date: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
 
-    // ファイルを削除
-    removeFile(importedFile.file)
+    if (error) {
+      toast({
+        title: "保存エラー",
+        description: "請求書を保存できませんでした。",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    alert("請求書をインポートしました!")
-  }
+    // UI 更新
+    removeFile(importedFile.file);
+
+    toast({
+      title: "保存完了",
+      description: "請求書が支払管理に追加されました！",
+    });
+  };
 
   const getStatusIcon = (status: ProcessingStatus) => {
     switch (status) {
@@ -722,6 +759,20 @@ export default function InvoiceImport() {
                                       : f
                                   )
                                 )
+                                setSelectedFile(prev =>
+                                  prev && prev.file === selectedFile.file
+                                    ? {
+                                        ...prev,
+                                        result: {
+                                          ...prev.result!,
+                                          invoice: {
+                                            ...prev.result!.invoice,
+                                            invoiceNumber: e.target.value,
+                                          },
+                                        },
+                                      }
+                                    : prev
+                                )
                               }}
                               className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
                             />
@@ -762,6 +813,20 @@ export default function InvoiceImport() {
                                             }
                                           : f
                                       )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                issueDate: date,
+                                              },
+                                            },
+                                          }
+                                        : prev
                                     )
                                   }}
                                   initialFocus
@@ -806,6 +871,20 @@ export default function InvoiceImport() {
                                           }
                                         : f
                                     )
+                                  )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              dueDate: date,
+                                            },
+                                          },
+                                        }
+                                      : prev
                                   )
                                 }}
                                 initialFocus
@@ -857,6 +936,26 @@ export default function InvoiceImport() {
                                         : f
                                     )
                                   )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              issuerInfo: {
+                                                name: e.target.value,
+                                                address: prev.result!.invoice.issuerInfo?.address || '',
+                                                phone: prev.result!.invoice.issuerInfo?.phone || '',
+                                                email: prev.result!.invoice.issuerInfo?.email || '',
+                                                registrationNumber: prev.result!.invoice.issuerInfo?.registrationNumber || '',
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
+                                  )
                                 }}
                                 className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
                               />
@@ -888,6 +987,26 @@ export default function InvoiceImport() {
                                           }
                                         : f
                                     )
+                                  )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              issuerInfo: {
+                                                name: prev.result!.invoice.issuerInfo?.name || '',
+                                                address: e.target.value,
+                                                phone: prev.result!.invoice.issuerInfo?.phone || '',
+                                                email: prev.result!.invoice.issuerInfo?.email || '',
+                                                registrationNumber: prev.result!.invoice.issuerInfo?.registrationNumber || '',
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
                                   )
                                 }}
                                 rows={2}
@@ -922,6 +1041,26 @@ export default function InvoiceImport() {
                                           : f
                                       )
                                     )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                issuerInfo: {
+                                                  name: prev.result!.invoice.issuerInfo?.name || '',
+                                                  address: prev.result!.invoice.issuerInfo?.address || '',
+                                                  phone: e.target.value,
+                                                  email: prev.result!.invoice.issuerInfo?.email || '',
+                                                  registrationNumber: prev.result!.invoice.issuerInfo?.registrationNumber || '',
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
                                   }}
                                 />
                               </div>
@@ -953,6 +1092,26 @@ export default function InvoiceImport() {
                                             }
                                           : f
                                       )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                issuerInfo: {
+                                                  name: prev.result!.invoice.issuerInfo?.name || '',
+                                                  address: prev.result!.invoice.issuerInfo?.address || '',
+                                                  phone: prev.result!.invoice.issuerInfo?.phone || '',
+                                                  email: e.target.value,
+                                                  registrationNumber: prev.result!.invoice.issuerInfo?.registrationNumber || '',
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
                                     )
                                   }}
                                 />
@@ -986,6 +1145,26 @@ export default function InvoiceImport() {
                                           }
                                         : f
                                     )
+                                  )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              issuerInfo: {
+                                                name: prev.result!.invoice.issuerInfo?.name || '',
+                                                address: prev.result!.invoice.issuerInfo?.address || '',
+                                                phone: prev.result!.invoice.issuerInfo?.phone || '',
+                                                email: prev.result!.invoice.issuerInfo?.email || '',
+                                                registrationNumber: e.target.value,
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
                                   )
                                 }}
                               />

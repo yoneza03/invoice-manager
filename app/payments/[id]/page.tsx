@@ -13,7 +13,6 @@ export default function PaymentDetailPage({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-
   const supabase = createSupabaseBrowserClient();
 
   const [invoice, setInvoice] = useState<PaymentInvoice | null>(null);
@@ -21,8 +20,9 @@ export default function PaymentDetailPage({
 
   useEffect(() => {
     const load = async () => {
+      // 🔥 ここが重要！ Promise を await する
       const { id } = await params;
-      
+
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
@@ -62,6 +62,76 @@ export default function PaymentDetailPage({
       : invoice.status === "pending"
       ? "text-yellow-600 bg-yellow-100"
       : "text-red-600 bg-red-100";
+
+  // --- 支払済みに更新する処理 ---
+  const markAsPaid = async () => {
+    if (!invoice) return;
+
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        status: "paid",
+        paid_date: new Date().toISOString().split("T")[0], // 今日の日付（YYYY-MM-DD）
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", invoice.id);
+
+    if (error) {
+      toast({
+        title: "エラー",
+        description: "支払済みに更新できませんでした。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "更新完了",
+      description: "ステータスを「支払済み」に変更しました。",
+    });
+
+    // 最新データを反映
+    setInvoice({
+      ...invoice,
+      status: "paid",
+      paid_date: new Date().toISOString().split("T")[0],
+    });
+  };
+
+  // --- 支払済みを未払いに戻す処理 ---
+  const markAsUnpaid = async () => {
+    if (!invoice) return;
+
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        status: "pending",
+        paid_date: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", invoice.id);
+
+    if (error) {
+      toast({
+        title: "エラー",
+        description: "未払いに戻せませんでした。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "更新完了",
+      description: "ステータスを「未払い」に戻しました。",
+    });
+
+    // 最新データを反映
+    setInvoice({
+      ...invoice,
+      status: "pending",
+      paid_date: null,
+    });
+  };
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-8">
@@ -117,6 +187,24 @@ export default function PaymentDetailPage({
             <p>{invoice.paid_date ?? "-"}</p>
           </div>
 
+          {/* 支払済みに更新 or 未払いに戻すボタン */}
+          <div className="mt-6">
+            {invoice.status !== "paid" ? (
+              <button
+                onClick={markAsPaid}
+                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow"
+              >
+                支払済みに更新する
+              </button>
+            ) : (
+              <button
+                onClick={markAsUnpaid}
+                className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg shadow"
+              >
+                未払いに戻す
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

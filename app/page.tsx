@@ -29,6 +29,9 @@ export default function Home() {
     } else if (page === "templates") {
       // テンプレート管理ページへ遷移（App Routerを使用）
       router.push("/templates")
+    } else if (page === "payments") {
+      // 支払管理ページへ遷移（App Routerを使用）
+      router.push("/payments")
     } else {
       setCurrentPage(page as Page)
       setEditingInvoiceId(null)
