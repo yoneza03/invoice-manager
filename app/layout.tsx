@@ -4,7 +4,6 @@ import './globals.css'
 import { StoreProvider } from '@/lib/store'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
-import { AuthGuard } from '@/components/auth-guard'
 
 export const metadata: Metadata = {
   title: '請求書管理システム | Invoice Management System',
@@ -14,17 +13,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
     <html lang="ja" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <StoreProvider>
-            <AuthGuard>
-              {children}
-            </AuthGuard>
+            {children}
             <Analytics />
           </StoreProvider>
           <Toaster />

@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns"
 import { ja } from "date-fns/locale"
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { InvoiceStatus } from "@/lib/types";
 
 
 async function calculateFileHash(file: File): Promise<string> {
@@ -547,6 +548,43 @@ export default function InvoiceImport() {
       });
       return;
     }
+
+    // Supabase へ保存が成功した後に追加
+    const clientNameFromImport = (invoice as any).clientName ?? invoice.client?.name ?? "";
+
+    addInvoice({
+      id: crypto.randomUUID(),
+      invoiceNumber: (invoice as any).invoiceNumber ?? "",
+      client: {
+        id: crypto.randomUUID(),
+        name: clientNameFromImport,
+        email: "",
+        phone: "",
+        address: "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      issueDate: invoice.issueDate ? new Date(invoice.issueDate as any) : new Date(),
+      dueDate: invoice.dueDate ? new Date(invoice.dueDate as any) : new Date(),
+      lineItems: invoice.lineItems ?? [],
+      subtotal: invoice.subtotal ?? 0,
+      tax: invoice.tax ?? 0,
+      taxRate: invoice.taxRate ?? 0,
+      total: invoice.total ?? 0,
+      status: (invoice.status as InvoiceStatus) ?? "unpaid",
+      paidDate: invoice.paidDate ?? undefined,
+      notes: invoice.notes ?? "",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      source: invoice.source ?? undefined,
+      attachments: invoice.attachments ?? [],
+      ocrData: invoice.ocrData ?? undefined,
+      paymentInfo: invoice.paymentInfo ?? undefined,
+      isReadonly: false,
+      originalPdfAttachmentId: invoice.originalPdfAttachmentId ?? undefined,
+      issuerInfo: invoice.issuerInfo ?? undefined,
+      pdfStorageLocation: "indexeddb",
+    });
 
     // UI 更新
     removeFile(importedFile.file);
@@ -1212,6 +1250,23 @@ export default function InvoiceImport() {
                                         : f
                                     )
                                   )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              client: {
+                                                ...prev.result!.invoice.client!,
+                                                name: e.target.value,
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
+                                  )
                                 }}
                                 className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
                               />
@@ -1240,6 +1295,23 @@ export default function InvoiceImport() {
                                           }
                                         : f
                                     )
+                                  )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              client: {
+                                                ...prev.result!.invoice.client!,
+                                                address: e.target.value,
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
                                   )
                                 }}
                                 rows={2}
@@ -1271,6 +1343,23 @@ export default function InvoiceImport() {
                                           : f
                                       )
                                     )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                client: {
+                                                  ...prev.result!.invoice.client!,
+                                                  contactPerson: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
                                   }}
                                 />
                               </div>
@@ -1298,6 +1387,23 @@ export default function InvoiceImport() {
                                             }
                                           : f
                                       )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                client: {
+                                                  ...prev.result!.invoice.client!,
+                                                  phone: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
                                     )
                                   }}
                                 />
@@ -1344,6 +1450,22 @@ export default function InvoiceImport() {
                                       : f
                                   )
                                 )
+                                setSelectedFile(prev =>
+                                  prev && prev.file === selectedFile.file
+                                    ? {
+                                        ...prev,
+                                        result: {
+                                          ...prev.result!,
+                                          invoice: {
+                                            ...prev.result!.invoice,
+                                            subtotal,
+                                            tax,
+                                            total,
+                                          },
+                                        },
+                                      }
+                                    : prev
+                                )
                               }}
                               className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
                             />
@@ -1378,6 +1500,22 @@ export default function InvoiceImport() {
                                       : f
                                   )
                                 )
+                                setSelectedFile(prev =>
+                                  prev && prev.file === selectedFile.file
+                                    ? {
+                                        ...prev,
+                                        result: {
+                                          ...prev.result!,
+                                          invoice: {
+                                            ...prev.result!.invoice,
+                                            taxRate,
+                                            tax,
+                                            total,
+                                          },
+                                        },
+                                      }
+                                    : prev
+                                )
                               }}
                             />
                           </div>
@@ -1410,6 +1548,21 @@ export default function InvoiceImport() {
                                       : f
                                   )
                                 )
+                                setSelectedFile(prev =>
+                                  prev && prev.file === selectedFile.file
+                                    ? {
+                                        ...prev,
+                                        result: {
+                                          ...prev.result!,
+                                          invoice: {
+                                            ...prev.result!.invoice,
+                                            tax,
+                                            total,
+                                          },
+                                        },
+                                      }
+                                    : prev
+                                )
                               }}
                               className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
                             />
@@ -1437,6 +1590,20 @@ export default function InvoiceImport() {
                                         }
                                       : f
                                   )
+                                )
+                                setSelectedFile(prev =>
+                                  prev && prev.file === selectedFile.file
+                                    ? {
+                                        ...prev,
+                                        result: {
+                                          ...prev.result!,
+                                          invoice: {
+                                            ...prev.result!.invoice,
+                                            total,
+                                          },
+                                        },
+                                      }
+                                    : prev
                                 )
                               }}
                               className={`font-bold text-lg ${ocrConfidence < 0.7 ? "bg-yellow-50" : ""}`}
@@ -1485,6 +1652,23 @@ export default function InvoiceImport() {
                                           : f
                                       )
                                     )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  bankName: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
                                   }}
                                 />
                               </div>
@@ -1512,6 +1696,23 @@ export default function InvoiceImport() {
                                             }
                                           : f
                                       )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  branchName: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
                                     )
                                   }}
                                 />
@@ -1544,6 +1745,23 @@ export default function InvoiceImport() {
                                           : f
                                       )
                                     )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  accountType: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
                                   }}
                                 />
                               </div>
@@ -1571,6 +1789,23 @@ export default function InvoiceImport() {
                                             }
                                           : f
                                       )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  accountNumber: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
                                     )
                                   }}
                                 />
@@ -1600,6 +1835,23 @@ export default function InvoiceImport() {
                                           }
                                         : f
                                     )
+                                  )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              paymentInfo: {
+                                                ...prev.result!.invoice.paymentInfo,
+                                                accountHolder: e.target.value,
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
                                   )
                                 }}
                               />
@@ -1660,6 +1912,22 @@ export default function InvoiceImport() {
                                                       : f
                                                   )
                                                 )
+                                                setSelectedFile(prev =>
+                                                  prev && prev.file === selectedFile.file
+                                                    ? {
+                                                        ...prev,
+                                                        result: {
+                                                          ...prev.result!,
+                                                          invoice: {
+                                                            ...prev.result!.invoice,
+                                                            lineItems: prev.result!.invoice.lineItems?.map((li, i) =>
+                                                              i === index ? { ...li, description: e.target.value } : li
+                                                            ),
+                                                          },
+                                                        },
+                                                      }
+                                                    : prev
+                                                )
                                               }}
                                               className="h-8"
                                             />
@@ -1688,6 +1956,22 @@ export default function InvoiceImport() {
                                                         }
                                                       : f
                                                   )
+                                                )
+                                                setSelectedFile(prev =>
+                                                  prev && prev.file === selectedFile.file
+                                                    ? {
+                                                        ...prev,
+                                                        result: {
+                                                          ...prev.result!,
+                                                          invoice: {
+                                                            ...prev.result!.invoice,
+                                                            lineItems: prev.result!.invoice.lineItems?.map((li, i) =>
+                                                              i === index ? { ...li, quantity, amount } : li
+                                                            ),
+                                                          },
+                                                        },
+                                                      }
+                                                    : prev
                                                 )
                                               }}
                                               className="h-8"
@@ -1718,6 +2002,22 @@ export default function InvoiceImport() {
                                                       : f
                                                   )
                                                 )
+                                                setSelectedFile(prev =>
+                                                  prev && prev.file === selectedFile.file
+                                                    ? {
+                                                        ...prev,
+                                                        result: {
+                                                          ...prev.result!,
+                                                          invoice: {
+                                                            ...prev.result!.invoice,
+                                                            lineItems: prev.result!.invoice.lineItems?.map((li, i) =>
+                                                              i === index ? { ...li, unitPrice, amount } : li
+                                                            ),
+                                                          },
+                                                        },
+                                                      }
+                                                    : prev
+                                                )
                                               }}
                                               className="h-8"
                                             />
@@ -1745,6 +2045,22 @@ export default function InvoiceImport() {
                                                         }
                                                       : f
                                                   )
+                                                )
+                                                setSelectedFile(prev =>
+                                                  prev && prev.file === selectedFile.file
+                                                    ? {
+                                                        ...prev,
+                                                        result: {
+                                                          ...prev.result!,
+                                                          invoice: {
+                                                            ...prev.result!.invoice,
+                                                            lineItems: prev.result!.invoice.lineItems?.map((li, i) =>
+                                                              i === index ? { ...li, amount } : li
+                                                            ),
+                                                          },
+                                                        },
+                                                      }
+                                                    : prev
                                                 )
                                               }}
                                               className="h-8 font-medium"
@@ -1883,6 +2199,20 @@ export default function InvoiceImport() {
                                     }
                                   : f
                               )
+                            )
+                            setSelectedFile(prev =>
+                              prev && prev.file === selectedFile.file
+                                ? {
+                                    ...prev,
+                                    result: {
+                                      ...prev.result!,
+                                      invoice: {
+                                        ...prev.result!.invoice,
+                                        notes: e.target.value,
+                                      },
+                                    },
+                                  }
+                                : prev
                             )
                           }}
                           placeholder="備考やメモを入力してください"

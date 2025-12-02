@@ -1,11 +1,13 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import { Invoice, Client, Settings, Payment, InvoiceStatus, User, LoginCredentials, AuthState } from "./types"
+import { Invoice, Client, Settings, Payment, InvoiceStatus, User, LoginCredentials, AuthState, RegisterCredentials } from "./types"
 import { mockInvoices, mockClients, mockSettings, mockPayments } from "./mock-data"
 import { migrateInvoiceStorage } from "./migration"
 import { updateInvoiceStatus as apiUpdateInvoiceStatus } from "./api"
 import { createSupabaseBrowserClient } from "./supabase-browser"
+import LoginPage from "@/app/login/page"
+
 
 interface StoreContextType {
   invoices: Invoice[]
@@ -24,6 +26,7 @@ interface StoreContextType {
   getInvoiceById: (id: string) => Invoice | undefined
   getClientById: (id: string) => Client | undefined
   login: (credentials: LoginCredentials) => Promise<boolean>
+  register: (credentials: RegisterCredentials) => Promise<{ success: boolean; error?: string }>
   logout: () => void
   updateInvoiceStatus: (id: string, status: InvoiceStatus) => void
 }
@@ -248,6 +251,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const register = async (credentials: RegisterCredentials): Promise<{ success: boolean; error?: string }> => {
+    setAuthState(prev => ({ ...prev, loading: true }))
+    
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data, error } = await supabase.auth.signUp({
+        email: credentials.email,
+        password: credentials.password,
+        options: {
+          data: {
+            name: credentials.name,
+          }
+        }
+      })
+
+      if (error) {
+        console.error("[Store] Supabase 登録エラー:", error)
+        setAuthState(prev => ({ ...prev, loading: false }))
+        return {
+          success: false,
+          error: error.message === "User already registered"
+            ? "このメールアドレスは既に登録されています"
+            : "登録中にエラーが発生しました"
+        }
+      }
+
+      if (data.session?.user) {
+        const user: User = {
+          id: data.session.user.id,
+          email: data.session.user.email || "",
+          name: credentials.name || data.session.user.email || "ユーザー",
+          createdAt: new Date(data.session.user.created_at),
+          lastLogin: new Date(),
+        }
+        
+        setAuthState({
+          isAuthenticated: true,
+          user,
+          loading: false,
+        })
+        return { success: true }
+      }
+
+      // メール確認が必要な場合
+      setAuthState(prev => ({ ...prev, loading: false }))
+      return {
+        success: true,
+        error: "確認メールを送信しました。メールを確認してアカウントを有効化してください。"
+      }
+    } catch (err) {
+      console.error("[Store] 登録処理エラー:", err)
+      setAuthState(prev => ({ ...prev, loading: false }))
+      return { success: false, error: "登録中にエラーが発生しました" }
+    }
+  }
+
   const logout = async () => {
     const supabase = createSupabaseBrowserClient()
     await supabase.auth.signOut()
@@ -267,32 +326,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return (
-    <StoreContext.Provider
-      value={{
-        invoices,
-        clients,
-        settings,
-        payments,
-        authState,
-        addInvoice,
-        updateInvoice,
-        deleteInvoice,
-        addClient,
-        updateClient,
-        deleteClient,
-        updateSettings,
-        addPayment,
-        getInvoiceById,
-        getClientById,
-        login,
-        logout,
-        updateInvoiceStatus,
-      }}
-    >
-      {children}
-    </StoreContext.Provider>
-  )
+if (authState.loading) {
+  return <div className="p-4 text-center">読み込み中...</div>
+}
+
+if (!authState.isAuthenticated) {
+  // LoginPage の import が必要（後で案内します）
+  return <LoginPage />
+}
+
+return (
+  <StoreContext.Provider
+    value={{
+      invoices,
+      clients,
+      settings,
+      payments,
+      authState,
+      addInvoice,
+      updateInvoice,
+      deleteInvoice,
+      addClient,
+      updateClient,
+      deleteClient,
+      updateSettings,
+      addPayment,
+      getInvoiceById,
+      getClientById,
+      login,
+      register,
+      logout,
+      updateInvoiceStatus,
+    }}
+  >
+    {children}
+  </StoreContext.Provider>
+)
 }
 
 export function useStore() {
