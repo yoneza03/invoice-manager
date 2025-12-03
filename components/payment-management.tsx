@@ -9,9 +9,18 @@ interface PaymentManagementProps {
   onNavigate: (page: string) => void;
 }
 
+interface Payment {
+  id: string;
+  invoice_number: string;
+  amount: number | string;
+  status: "paid" | "pending" | "overdue";
+  due_date: string;
+  paid_date?: string | null;
+}
+
 export default function PaymentManagement({ onNavigate }: PaymentManagementProps) {
   const supabase = createSupabaseBrowserClient();
-  const [payments, setPayments] = useState([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -20,7 +29,7 @@ export default function PaymentManagement({ onNavigate }: PaymentManagementProps
         .select("*")
         .order("due_date", { ascending: true });
 
-      if (!error) setPayments(data);
+      if (!error && data) setPayments(data as Payment[]);
     };
 
     load();
@@ -107,7 +116,7 @@ export default function PaymentManagement({ onNavigate }: PaymentManagementProps
   );
 }
 
-function SummaryCard({ icon, label, value, count }) {
+function SummaryCard({ icon, label, value, count }: { icon: React.ReactNode; label: string; value: number; count: number }) {
   return (
     <div className="bg-card border border-border rounded-lg p-6">
       <div className="flex items-center gap-3 mb-2">
@@ -120,7 +129,7 @@ function SummaryCard({ icon, label, value, count }) {
   );
 }
 
-function Th({ children }) {
+function Th({ children }: { children: React.ReactNode }) {
   return (
     <th className="text-left py-4 px-6 text-sm font-semibold text-foreground">
       {children}
@@ -128,7 +137,7 @@ function Th({ children }) {
   );
 }
 
-function Td({ children }) {
+function Td({ children }: { children: React.ReactNode }) {
   return (
     <td className="py-4 px-6 text-sm text-foreground">
       {children}
@@ -136,7 +145,7 @@ function Td({ children }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status }: { status: "paid" | "pending" | "overdue" }) {
   const style =
     status === "paid"
       ? "bg-green-100 text-green-800"

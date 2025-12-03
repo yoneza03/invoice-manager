@@ -12,6 +12,7 @@ import PaymentManagement from "@/components/payment-management"
 import SearchFilterEnhanced from "@/components/search-filter-enhanced"
 import SettingsEnhanced from "@/components/settings-enhanced"
 import ClientManagement from "@/components/client-management"
+import AdminUserList from "@/components/admin/AdminUserList"
 import Sidebar from "@/components/sidebar"
 
 type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients" | "templates" | "admin-users"

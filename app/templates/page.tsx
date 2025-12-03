@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Spinner } from "@/components/ui/spinner"
-import { Plus, Search, Edit, Trash2, Calendar } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Calendar, ArrowLeft } from "lucide-react"
 
 export default function TemplatesPage() {
   const router = useRouter()
@@ -171,6 +171,18 @@ export default function TemplatesPage() {
 
   return (
     <div className="container mx-auto p-6">
+      {/* 戻るボタン */}
+      <div className="mb-4">
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          前のページへ戻る
+        </Button>
+      </div>
+
       {/* ヘッダー */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">請求書テンプレート</h1>
@@ -212,14 +224,8 @@ export default function TemplatesPage() {
           <p className="text-muted-foreground mb-4">
             {searchQuery
               ? "別のキーワードで検索してください"
-              : "新規テンプレートを作成して始めましょう"}
+              : "右上の「新規テンプレート作成」ボタンから作成してください"}
           </p>
-          {!searchQuery && (
-            <Button onClick={handleCreateNew}>
-              <Plus className="mr-2 h-4 w-4" />
-              新規テンプレート作成
-            </Button>
-          )}
         </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
