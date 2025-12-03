@@ -723,12 +723,34 @@ export interface LoginCredentials {
 }
 
 /**
+ * 新規登録情報
+ */
+export interface RegisterCredentials {
+  email: string
+  password: string
+  name?: string
+}
+
+/**
+ * ユーザー権限
+ */
+export interface UserPermissions {
+  role: "admin" | "accounting" | "sales" | "viewer"
+  canEditInvoices: boolean
+  canEditClients: boolean
+  canAccessPayments: boolean
+  canSendEmails: boolean
+  canAccessSettings: boolean
+}
+
+/**
  * 認証状態
  */
 export interface AuthState {
   isAuthenticated: boolean
   user: User | null
   loading: boolean
+  permissions: UserPermissions | null
 }
 
 // ========================================

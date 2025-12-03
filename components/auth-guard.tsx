@@ -11,8 +11,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
-    // ログインページは認証チェックをスキップ
-    if (pathname === "/login") {
+    // ログイン・登録ページは認証チェックをスキップ
+    if (pathname === "/login" || pathname === "/register") {
       if (authState.isAuthenticated && !authState.loading) {
         router.push("/")
       }
@@ -25,8 +25,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [authState.isAuthenticated, authState.loading, pathname, router])
 
-  // ログインページの場合はそのまま表示
-  if (pathname === "/login") {
+  // ログイン・登録ページの場合はそのまま表示
+  if (pathname === "/login" || pathname === "/register") {
     return <>{children}</>
   }
 

@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useStore } from "@/lib/store"
 import Dashboard from "@/components/dashboard"
 import InvoiceListEnhanced from "@/components/invoice-list-enhanced"
 import InvoiceDetailEnhanced from "@/components/invoice-detail-enhanced"
@@ -13,13 +14,28 @@ import SettingsEnhanced from "@/components/settings-enhanced"
 import ClientManagement from "@/components/client-management"
 import Sidebar from "@/components/sidebar"
 
-type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients" | "templates"
+type Page = "dashboard" | "invoices" | "detail" | "create" | "import" | "payments" | "search" | "settings" | "clients" | "templates" | "admin-users"
 
 export default function Home() {
   const router = useRouter()
+  const { authState } = useStore()
   const [currentPage, setCurrentPage] = useState<Page>("dashboard")
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!authState.loading && !authState.isAuthenticated) {
+      router.push("/login")
+    }
+  }, [authState.isAuthenticated, authState.loading, router])
+
+  if (authState.loading) {
+    return <div className="min-h-screen flex items-center justify-center">読み込み中...</div>
+  }
+
+  if (!authState.isAuthenticated) {
+    return null
+  }
 
   const handleNavigate = (page: string, invoiceId?: string) => {
     if (page === "invoice-edit") {
@@ -61,6 +77,9 @@ export default function Home() {
         return <SearchFilterEnhanced onNavigate={handleNavigate} />
       case "settings":
         return <SettingsEnhanced onNavigate={handleNavigate} />
+      case "admin-users":
+        return <AdminUserList onNavigate={handleNavigate} />
+
       default:
         return <Dashboard onNavigate={handleNavigate} />
     }

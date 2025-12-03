@@ -6,7 +6,6 @@ import { mockInvoices, mockClients, mockSettings, mockPayments } from "./mock-da
 import { migrateInvoiceStorage } from "./migration"
 import { updateInvoiceStatus as apiUpdateInvoiceStatus } from "./api"
 import { createSupabaseBrowserClient } from "./supabase-browser"
-import LoginPage from "@/app/login/page"
 
 
 interface StoreContextType {
@@ -42,6 +41,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
     user: null,
     loading: true,
+    permissions: null,
   })
 
   // 初期化処理
@@ -49,8 +49,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Supabase セッションから認証状態を復元
     const supabase = createSupabaseBrowserClient()
     
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        // 権限読み込み
+        const { data: permData } = await supabase
+          .from("permissions")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .single()
+
         setAuthState({
           isAuthenticated: true,
           user: {
@@ -61,6 +68,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             lastLogin: new Date(),
           },
           loading: false,
+          permissions: permData ?? null,
         })
       } else {
         setAuthState(prev => ({ ...prev, loading: false }))
@@ -225,22 +233,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      if (data.session?.user) {
-        const user: User = {
-          id: data.session.user.id,
-          email: data.session.user.email || "",
-          name: data.session.user.user_metadata?.name || data.session.user.email || "ユーザー",
-          createdAt: new Date(data.session.user.created_at),
-          lastLogin: new Date(),
-        }
-        
-        setAuthState({
-          isAuthenticated: true,
-          user,
-          loading: false,
-        })
-        return true
+    if (data.session?.user) {
+      const user: User = {
+        id: data.session.user.id,
+        email: data.session.user.email || "",
+        name: data.session.user.user_metadata?.name || data.session.user.email || "ユーザー",
+        createdAt: new Date(data.session.user.created_at),
+        lastLogin: new Date(),
       }
+
+      // ★ 権限を Supabase から読み込む
+      const { data: permData } = await supabase
+        .from("permissions")
+        .select("*")
+        .eq("user_id", data.session.user.id)
+        .single()
+
+      setAuthState({
+        isAuthenticated: true,
+        user,
+        loading: false,
+        permissions: permData ?? null,   // ← ここで権限をセット
+      })
+      return true
+    }
 
       setAuthState(prev => ({ ...prev, loading: false }))
       return false
@@ -326,42 +342,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }
 
-if (authState.loading) {
-  return <div className="p-4 text-center">読み込み中...</div>
-}
-
-if (!authState.isAuthenticated) {
-  // LoginPage の import が必要（後で案内します）
-  return <LoginPage />
-}
-
-return (
-  <StoreContext.Provider
-    value={{
-      invoices,
-      clients,
-      settings,
-      payments,
-      authState,
-      addInvoice,
-      updateInvoice,
-      deleteInvoice,
-      addClient,
-      updateClient,
-      deleteClient,
-      updateSettings,
-      addPayment,
-      getInvoiceById,
-      getClientById,
-      login,
-      register,
-      logout,
-      updateInvoiceStatus,
-    }}
-  >
-    {children}
-  </StoreContext.Provider>
-)
+  return (
+    <StoreContext.Provider
+      value={{
+        invoices,
+        clients,
+        settings,
+        payments,
+        authState,
+        addInvoice,
+        updateInvoice,
+        deleteInvoice,
+        addClient,
+        updateClient,
+        deleteClient,
+        updateSettings,
+        addPayment,
+        getInvoiceById,
+        getClientById,
+        login,
+        register,
+        logout,
+        updateInvoiceStatus,
+      }}
+    >
+      {children}
+    </StoreContext.Provider>
+  )
 }
 
 export function useStore() {
