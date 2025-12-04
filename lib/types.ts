@@ -25,6 +25,9 @@ export interface Client {
   memo?: string
   createdAt: Date
   updatedAt: Date
+  // 電子帳簿保存法対応フィールド
+  dataHash?: string  // 改ざん防止用ハッシュ値
+  hashGeneratedAt?: string  // ハッシュ生成日時 (ISO 8601)
 }
 
 // 請求書
@@ -52,6 +55,9 @@ export interface Invoice {
   originalPdfAttachmentId?: string
   issuerInfo?: IssuerInfo  // 🆕 発行元情報（インポート請求書用）
   pdfStorageLocation?: 'none' | 'indexeddb'  // 🆕 PDFデータの保存場所
+  // 電子帳簿保存法対応フィールド
+  dataHash?: string  // 改ざん防止用ハッシュ値
+  hashGeneratedAt?: string  // ハッシュ生成日時 (ISO 8601)
 }
 
 // 添付ファイル
@@ -120,6 +126,9 @@ export interface Payment {
   paymentMethod?: string
   notes?: string
   createdAt: Date
+  // 電子帳簿保存法対応フィールド
+  dataHash?: string  // 改ざん防止用ハッシュ値
+  hashGeneratedAt?: string  // ハッシュ生成日時 (ISO 8601)
 }
 
 // 発行者情報（インポート相手企業）

@@ -226,16 +226,6 @@ export default function SettingsEnhanced({ onNavigate }: SettingsEnhancedProps) 
         </label>
       </div>
 
-      {/** --- 管理者権限設定（管理者ユーザーのみ表示） --- */}
-      {authState.user && (
-        <button
-          onClick={() => onNavigate("permissions")}
-          className="mt-6 flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-3 rounded-lg hover:bg-secondary/80 transition"
-        >
-          <Shield size={20} />
-          管理者権限を設定する
-        </button>
-      )}
 
       {/** 保存ボタン */}
       <button

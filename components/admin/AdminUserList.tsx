@@ -84,11 +84,11 @@ export default function AdminUserList({ onNavigate }: AdminUserListProps) {
         createdAt: perm.created_at,
         permissions: {
           role: perm.role,
-          canEditInvoices: perm.can_edit_invoices,
-          canEditClients: perm.can_edit_clients,
-          canAccessPayments: perm.can_access_payments,
-          canSendEmails: perm.can_send_emails,
-          canAccessSettings: perm.can_access_settings,
+          canEditInvoices: perm.can_edit_invoices || false,
+          canEditClients: perm.can_edit_clients || false,
+          canAccessPayments: perm.can_access_payments || false,
+          canSendEmails: perm.can_send_emails || false,
+          canAccessSettings: perm.can_access_settings || false,
         },
       }))
 
@@ -142,9 +142,10 @@ export default function AdminUserList({ onNavigate }: AdminUserListProps) {
 
       if (error) {
         console.error("権限更新エラー:", error)
+        console.error("エラー詳細:", JSON.stringify(error, null, 2))
         toast({
           title: "エラー",
-          description: "権限の更新に失敗しました",
+          description: `権限の更新に失敗しました: ${error.message || "不明なエラー"}`,
           variant: "destructive",
         })
         return
