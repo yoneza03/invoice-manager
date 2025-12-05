@@ -58,6 +58,7 @@ export interface Invoice {
   // 電子帳簿保存法対応フィールド
   dataHash?: string  // 改ざん防止用ハッシュ値
   hashGeneratedAt?: string  // ハッシュ生成日時 (ISO 8601)
+  isTampered?: boolean  // 🆕 改ざん検知フラグ
 }
 
 // 添付ファイル

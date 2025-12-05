@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, Download, Trash2, Eye, Edit, Mail } from "lucide-react"
+import { ChevronLeft, Download, Trash2, Eye, Edit, Mail, AlertTriangle } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/api"
 import { InvoiceStatus } from "@/lib/types"
@@ -26,7 +26,15 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
     }
   }
 
-  const handleEdit = (id: string) => {
+  const handleEdit = (id: string, isTampered?: boolean) => {
+    if (isTampered) {
+      toast({
+        title: "編集不可",
+        description: "改ざんが検知された請求書は編集できません",
+        variant: "destructive",
+      })
+      return
+    }
     onNavigate("invoice-edit", id)
   }
 
@@ -146,8 +154,23 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
             </thead>
             <tbody>
               {filteredInvoices.map((invoice) => (
-                <tr key={invoice.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                  <td className="py-4 px-6 text-sm font-medium text-foreground">{invoice.invoiceNumber}</td>
+                <tr 
+                  key={invoice.id} 
+                  className={`border-b border-border hover:bg-muted/50 transition-colors ${
+                    invoice.isTampered ? "bg-red-50/50" : ""
+                  }`}
+                >
+                  <td className="py-4 px-6 text-sm font-medium text-foreground">
+                    <div className="flex items-center gap-2">
+                      {invoice.invoiceNumber}
+                      {invoice.isTampered && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-md">
+                          <AlertTriangle size={12} />
+                          改ざん検知
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-4 px-6 text-sm text-foreground">{invoice.client.name}</td>
                   <td className="py-4 px-6 text-sm font-semibold text-foreground">{formatCurrency(invoice.total)}</td>
                   <td className="py-4 px-6 text-sm">
@@ -180,9 +203,12 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                       {!invoice.isReadonly && (
                         <>
                           <button
-                            onClick={() => handleEdit(invoice.id)}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
-                            title="編集"
+                            onClick={() => handleEdit(invoice.id, invoice.isTampered)}
+                            className={`p-2 hover:bg-muted rounded-lg transition-colors ${
+                              invoice.isTampered ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                            title={invoice.isTampered ? "改ざん検知のため編集不可" : "編集"}
+                            disabled={invoice.isTampered}
                           >
                             <Edit size={18} className="text-blue-600" />
                           </button>

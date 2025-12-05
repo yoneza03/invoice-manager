@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronLeft, Download, Send, Edit } from "lucide-react"
+import { ChevronLeft, Download, Send, Edit, AlertTriangle } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/api"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
@@ -116,6 +116,14 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
 
   // 編集ボタンのハンドラー
   const handleEdit = () => {
+    if (invoice.isTampered) {
+      toast({
+        title: "編集不可",
+        description: "改ざんが検知された請求書は編集できません",
+        variant: "destructive",
+      })
+      return
+    }
     onNavigate("invoice-edit", invoice.id)
   }
 
@@ -161,6 +169,29 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
           <p className="text-muted-foreground">{invoice.invoiceNumber}</p>
         </div>
       </div>
+
+      {/* 改ざん検知警告カード */}
+      {invoice.isTampered && (
+        <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-lg p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 mt-1">
+              <AlertTriangle size={24} className="text-red-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-red-900 mb-2">⚠️ データ改ざんを検知しました</h3>
+              <p className="text-sm text-red-800 mb-3">
+                この請求書のデータが最後に保存された時点から変更されている可能性があります。
+                データの整合性が保証されないため、編集操作は無効化されています。
+              </p>
+              <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
+                <li>LocalStorageのデータが手動で変更された可能性があります</li>
+                <li>この請求書は閲覧のみ可能で、編集・更新はできません</li>
+                <li>データの信頼性を確保するため、元のデータを確認してください</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Invoice Content */}
@@ -322,7 +353,13 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
                 </button>
                 <button
                   onClick={handleEdit}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-border text-foreground font-semibold rounded-lg hover:bg-muted transition-colors"
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-border text-foreground font-semibold rounded-lg transition-colors ${
+                    invoice.isTampered 
+                      ? "opacity-50 cursor-not-allowed bg-muted" 
+                      : "hover:bg-muted"
+                  }`}
+                  disabled={invoice.isTampered}
+                  title={invoice.isTampered ? "改ざん検知のため編集不可" : "編集"}
                 >
                   <Edit size={18} />
                   編集
