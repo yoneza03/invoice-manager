@@ -19,11 +19,17 @@ export async function downloadInvoicePDFV6(invoice: Invoice, companyInfo: any) {
   doc.text("Invoice / Seikyu-sho", 105, yPos, { align: "center" })
   yPos += 15
 
+  // 期限切れ判定: 支払期限が現在日時を過ぎているかチェック
+  const isExpired = new Date(invoice.dueDate) < new Date()
+
   // 請求書番号とステータス
   doc.setFontSize(10)
   doc.text(`Invoice Number: ${invoice.invoiceNumber}`, 20, yPos)
-  const statusText = invoice.status === "paid" ? "Paid" : invoice.status === "pending" ? "Pending" : "Overdue"
-  doc.text(`Status: ${statusText}`, 150, yPos)
+  
+  // 期限切れの場合のみステータス表示
+  if (isExpired) {
+    doc.text(`Status: Overdue`, 150, yPos)
+  }
   yPos += 7
 
   // 日付

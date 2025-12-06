@@ -4,9 +4,10 @@ import { formatCurrency, formatDate } from "./api"
 export async function downloadInvoicePDFV4(invoice: Invoice, companyInfo: any) {
   // クライアントサイドでのみ動作するように動的インポート
   const html2pdf = (await import("html2pdf.js")).default
-  // HTMLテンプレートを生成
-  const statusText = invoice.status === "paid" ? "支払済" : invoice.status === "pending" ? "未払" : "期限切"
-  const statusColor = invoice.status === "paid" ? "#22c55e" : invoice.status === "overdue" ? "#ef4444" : "#f59e0b"
+  
+  // 期限切れ判定: 支払期限が現在日時を過ぎているかチェック
+  const isExpired = new Date(invoice.dueDate) < new Date()
+  const statusColor = "#ef4444" // 期限切の場合の赤色
   
   const html = `
     <!DOCTYPE html>
@@ -191,7 +192,7 @@ export async function downloadInvoicePDFV4(invoice: Invoice, companyInfo: any) {
           <div class="invoice-number">期限日: ${formatDate(invoice.dueDate)}</div>
         </div>
         <div>
-          <span class="status">${statusText}</span>
+          ${isExpired ? `<span class="status">期限切</span>` : ''}
         </div>
       </div>
       

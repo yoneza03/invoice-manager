@@ -127,8 +127,30 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
     onNavigate("invoice-edit", invoice.id)
   }
 
+  // PDFダウンロードボタンのハンドラー
+  const handleDownloadPDF = () => {
+    if (invoice.isTampered) {
+      toast({
+        title: "ダウンロード不可",
+        description: "改ざんが検知された請求書はダウンロードできません",
+        variant: "destructive",
+      })
+      return
+    }
+    downloadInvoicePDFJapanese(invoice, settings.company)
+  }
+
   // メール送信ボタンのハンドラー
   const handleSendEmail = () => {
+    if (invoice.isTampered) {
+      toast({
+        title: "送信不可",
+        description: "改ざんが検知された請求書は送信できません",
+        variant: "destructive",
+      })
+      return
+    }
+
     const email = invoice.client.email
     
     if (!email) {
@@ -338,15 +360,27 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
               <>
                 {/* 手動作成データの場合は通常のボタンを表示 */}
                 <button
-                  onClick={() => downloadInvoicePDFJapanese(invoice, settings.company)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                  onClick={handleDownloadPDF}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 font-semibold rounded-lg transition-colors ${
+                    invoice.isTampered
+                      ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  }`}
+                  disabled={invoice.isTampered}
+                  title={invoice.isTampered ? "改ざん検知のためダウンロード不可" : "PDFダウンロード"}
                 >
                   <Download size={18} />
                   PDFダウンロード
                 </button>
                 <button
                   onClick={handleSendEmail}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-primary text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors"
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-3 border font-semibold rounded-lg transition-colors ${
+                    invoice.isTampered
+                      ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground border-border"
+                      : "border-primary text-primary hover:bg-primary/5"
+                  }`}
+                  disabled={invoice.isTampered}
+                  title={invoice.isTampered ? "改ざん検知のため送信不可" : "メール送信"}
                 >
                   <Send size={18} />
                   メール送信
@@ -354,8 +388,8 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
                 <button
                   onClick={handleEdit}
                   className={`w-full flex items-center justify-center gap-2 px-4 py-3 border border-border text-foreground font-semibold rounded-lg transition-colors ${
-                    invoice.isTampered 
-                      ? "opacity-50 cursor-not-allowed bg-muted" 
+                    invoice.isTampered
+                      ? "opacity-50 cursor-not-allowed bg-muted"
                       : "hover:bg-muted"
                   }`}
                   disabled={invoice.isTampered}

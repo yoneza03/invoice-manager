@@ -39,6 +39,15 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
   }
 
   const handleSendEmail = (invoice: typeof invoices[0]) => {
+    if (invoice.isTampered) {
+      toast({
+        title: "送信不可",
+        description: "改ざんが検知された請求書は送信できません",
+        variant: "destructive",
+      })
+      return
+    }
+
     const email = invoice.client.email
     
     if (!email) {
@@ -66,6 +75,18 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
       title: "メール送信",
       description: `${email} 宛にメールクライアントを開きました`,
     })
+  }
+
+  const handleDownloadPDF = (invoice: typeof invoices[0]) => {
+    if (invoice.isTampered) {
+      toast({
+        title: "ダウンロード不可",
+        description: "改ざんが検知された請求書はダウンロードできません",
+        variant: "destructive",
+      })
+      return
+    }
+    downloadInvoicePDFJapanese(invoice, settings.company)
   }
 
   const getStatusText = (status: InvoiceStatus) => {
@@ -214,8 +235,13 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                           </button>
                           <button
                             onClick={() => handleSendEmail(invoice)}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
-                            title="メール送信"
+                            className={`p-2 rounded-lg transition-colors ${
+                              invoice.isTampered
+                                ? "opacity-50 cursor-not-allowed"
+                                : "hover:bg-muted"
+                            }`}
+                            title={invoice.isTampered ? "改ざん検知のため送信不可" : "メール送信"}
+                            disabled={invoice.isTampered}
                           >
                             <Mail size={18} className="text-green-600" />
                           </button>
@@ -224,10 +250,15 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          downloadInvoicePDFJapanese(invoice, settings.company)
+                          handleDownloadPDF(invoice)
                         }}
-                        className="p-2 hover:bg-muted rounded-lg transition-colors"
-                        title="ダウンロード"
+                        className={`p-2 rounded-lg transition-colors ${
+                          invoice.isTampered
+                            ? "opacity-50 cursor-not-allowed"
+                            : "hover:bg-muted"
+                        }`}
+                        title={invoice.isTampered ? "改ざん検知のためダウンロード不可" : "ダウンロード"}
+                        disabled={invoice.isTampered}
                       >
                         <Download size={18} className="text-accent" />
                       </button>

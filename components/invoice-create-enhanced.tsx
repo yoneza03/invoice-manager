@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronLeft, Plus, Trash2, FileText } from "lucide-react"
+import { ChevronLeft, Plus, Trash2, FileText, AlertTriangle } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { generateInvoiceNumber, generateId, calculateTax, calculateTotal } from "@/lib/api"
 import { Invoice, InvoiceLineItem, Client, InvoiceTemplate } from "@/lib/types"
@@ -42,6 +42,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
   ])
   const [notes, setNotes] = useState<string>("")
   const [isEditMode, setIsEditMode] = useState<boolean>(false)
+  const [isTampered, setIsTampered] = useState<boolean>(false)
   
   // テンプレート管理用の状態
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([])
@@ -95,6 +96,21 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
     if (invoiceId) {
       const invoice = getInvoiceById(invoiceId)
       if (invoice) {
+        // 改ざん検知チェック
+        if (invoice.isTampered) {
+          setIsTampered(true)
+          toast({
+            title: "編集不可",
+            description: "この請求書は改ざんが検知されているため編集できません",
+            variant: "destructive",
+          })
+          // 編集画面を表示せず、一覧に戻る
+          setTimeout(() => {
+            onNavigate("invoices")
+          }, 2000)
+          return
+        }
+        
         setIsEditMode(true)
         setSelectedClient(invoice.client.id)
         setIssueDate(new Date(invoice.issueDate).toISOString().split("T")[0])
@@ -171,6 +187,16 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
   }
 
   const handleSubmit = () => {
+    // 改ざん検知された請求書は保存不可
+    if (isTampered) {
+      toast({
+        title: "保存不可",
+        description: "改ざんが検知された請求書は保存できません",
+        variant: "destructive",
+      })
+      return
+    }
+
     const client = clients.find((c) => c.id === selectedClient)
     if (!client) {
       toast({
@@ -261,6 +287,49 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
   const tax = calculateTax(subtotal, settings.company.taxRate)
   const total = subtotal + tax
 
+  // 改ざん検知された場合は編集画面を表示しない
+  if (isTampered) {
+    return (
+      <div className="p-8 lg:p-12">
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => onNavigate("invoices")} className="p-2 hover:bg-muted rounded-lg transition-colors">
+            <ChevronLeft size={24} />
+          </button>
+          <div>
+            <h1 className="text-4xl font-bold text-foreground">編集不可</h1>
+            <p className="text-muted-foreground">この請求書は編集できません</p>
+          </div>
+        </div>
+        
+        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 mt-1">
+              <AlertTriangle size={32} className="text-red-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-red-900 mb-3">⚠️ データ改ざんを検知しました</h3>
+              <p className="text-red-800 mb-4">
+                この請求書のデータが最後に保存された時点から変更されている可能性があります。
+                データの整合性が保証されないため、編集操作は無効化されています。
+              </p>
+              <ul className="text-red-800 space-y-2 list-disc list-inside mb-6">
+                <li>LocalStorageのデータが手動で変更された可能性があります</li>
+                <li>この請求書は閲覧のみ可能で、編集・更新はできません</li>
+                <li>データの信頼性を確保するため、元のデータを確認してください</li>
+              </ul>
+              <button
+                onClick={() => onNavigate("invoices")}
+                className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                請求書一覧に戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-8 lg:p-12">
       <div className="flex items-center gap-4 mb-8">
@@ -285,6 +354,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                   value={selectedClient}
                   onChange={(e) => setSelectedClient(e.target.value)}
                   className="w-full px-4 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={isTampered}
                 >
                   <option value="">顧客を選択してください</option>
                   {clients.map((client) => (
@@ -308,6 +378,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                   value={issueDate}
                   onChange={(e) => setIssueDate(e.target.value)}
                   className="w-full px-4 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={isTampered}
                 />
               </div>
               <div>
@@ -317,6 +388,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full px-4 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={isTampered}
                 />
               </div>
             </div>
@@ -331,6 +403,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                   <DialogTrigger asChild>
                     <button
                       className="flex items-center gap-2 px-3 py-2 border border-border text-foreground font-medium rounded-lg hover:bg-muted transition-colors text-sm"
+                      disabled={isTampered}
                     >
                       <FileText size={18} />
                       テンプレート
@@ -383,7 +456,8 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                 
                 <button
                   onClick={addItem}
-                  className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors text-sm"
+                  className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isTampered}
                 >
                   <Plus size={18} />
                   項目追加
@@ -398,26 +472,29 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                     placeholder="品目説明"
                     value={item.description}
                     onChange={(e) => updateItem(item.id, "description", e.target.value)}
-                    className="col-span-6 px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="col-span-6 px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isTampered}
                   />
                   <input
                     type="number"
                     placeholder="数量"
                     value={item.quantity}
                     onChange={(e) => updateItem(item.id, "quantity", e.target.value)}
-                    className="col-span-2 px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="col-span-2 px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isTampered}
                   />
                   <input
                     type="number"
                     placeholder="単価"
                     value={item.unitPrice}
                     onChange={(e) => updateItem(item.id, "unitPrice", e.target.value)}
-                    className="col-span-3 px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="col-span-3 px-3 py-2 border border-border rounded-lg bg-input text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isTampered}
                   />
                   <button
                     onClick={() => removeItem(item.id)}
-                    className="col-span-1 p-2 hover:bg-destructive/10 rounded-lg transition-colors text-destructive"
-                    disabled={items.length === 1}
+                    className="col-span-1 p-2 hover:bg-destructive/10 rounded-lg transition-colors text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={items.length === 1 || isTampered}
                   >
                     <Trash2 size={18} />
                   </button>
@@ -434,7 +511,8 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
               rows={4}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-4 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-4 py-2 border border-border rounded-lg bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isTampered}
             />
           </div>
         </div>
@@ -462,7 +540,8 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
           <div className="space-y-2">
             <button
               onClick={handleSubmit}
-              className="w-full px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+              className="w-full px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isTampered}
             >
               {isEditMode ? "請求書更新" : "請求書作成"}
             </button>

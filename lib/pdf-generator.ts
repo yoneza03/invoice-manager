@@ -22,19 +22,19 @@ export function generateInvoicePDF(invoice: Invoice, companyInfo: any) {
   doc.text(`Issue Date: ${formatDate(invoice.issueDate)}`, 20, 52)
   doc.text(`Due Date: ${formatDate(invoice.dueDate)}`, 20, 59)
   
-  // ステータス
-  const statusText = invoice.status === "paid" ? "PAID" : invoice.status === "pending" ? "PENDING" : "OVERDUE"
-  const statusTextJP = invoice.status === "paid" ? "支払済" : invoice.status === "pending" ? "未払" : "期限切"
-  doc.setFontSize(14)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(invoice.status === "paid" ? 34 : invoice.status === "overdue" ? 239 : 251, 
-                   invoice.status === "paid" ? 197 : invoice.status === "overdue" ? 68 : 191, 
-                   invoice.status === "paid" ? 94 : invoice.status === "overdue" ? 68 : 36)
-  doc.text(statusText, 170, 45)
-  doc.setFontSize(10)
-  doc.text(`(${statusTextJP})`, 170, 52)
-  doc.setTextColor(0, 0, 0)
-  doc.setFont("helvetica", "normal")
+  // 期限切れ判定: 支払期限が現在日時を過ぎている場合のみステータス表示
+  const isExpired = new Date(invoice.dueDate) < new Date()
+  
+  if (isExpired) {
+    doc.setFontSize(14)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(239, 68, 68) // 赤色
+    doc.text("OVERDUE", 170, 45)
+    doc.setFontSize(10)
+    doc.text("(期限切)", 170, 52)
+    doc.setTextColor(0, 0, 0)
+    doc.setFont("helvetica", "normal")
+  }
   
   // 発行者情報
   doc.setFontSize(10)
