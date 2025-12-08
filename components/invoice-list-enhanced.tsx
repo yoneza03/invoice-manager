@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ChevronLeft, Download, Trash2, Eye, Edit, Mail, AlertTriangle } from "lucide-react"
 import { useStore } from "@/lib/store"
-import { formatCurrency, formatDate } from "@/lib/api"
+import { formatCurrency, formatDate, markInvoiceAsViewed } from "@/lib/api"
 import { InvoiceStatus } from "@/lib/types"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
 import { useToast } from "@/hooks/use-toast"
@@ -17,8 +17,14 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
   const { invoices, deleteInvoice, settings, updateInvoiceStatus } = useStore()
   const { toast } = useToast()
   const [filter, setFilter] = useState<string>("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const filteredInvoices = filter === "all" ? invoices : invoices.filter((inv) => inv.status === filter)
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedInvoices = filteredInvoices.slice(startIndex, endIndex)
 
   const handleDelete = (id: string, invoiceNumber: string) => {
     if (confirm(`請求書 ${invoiceNumber} を削除しますか?`)) {
@@ -174,7 +180,7 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
               </tr>
             </thead>
             <tbody>
-              {filteredInvoices.map((invoice) => (
+              {paginatedInvoices.map((invoice) => (
                 <tr 
                   key={invoice.id} 
                   className={`border-b border-border hover:bg-muted/50 transition-colors ${
@@ -215,7 +221,11 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
                   <td className="py-4 px-6 text-sm">
                     <div className="flex gap-2">
                       <button
-                        onClick={() => onNavigate("detail", invoice.id)}
+                        onClick={() => {
+                          // 既読フラグを更新
+                          markInvoiceAsViewed(invoice.id)
+                          onNavigate("detail", invoice.id)
+                        }}
                         className="p-2 hover:bg-muted rounded-lg transition-colors"
                         title="詳細表示"
                       >
@@ -280,12 +290,33 @@ export default function InvoiceListEnhanced({ onNavigate }: InvoiceListEnhancedP
 
       {/* Pagination */}
       <div className="flex justify-between items-center mt-6">
-        <p className="text-sm text-muted-foreground">全 {filteredInvoices.length} 件を表示</p>
-        <div className="flex gap-2">
-          <button className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors font-medium">
+        <p className="text-sm text-muted-foreground">
+          全 {filteredInvoices.length} 件中 {startIndex + 1}～{Math.min(endIndex, filteredInvoices.length)} 件を表示
+        </p>
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className={`px-4 py-2 border border-border rounded-lg font-medium transition-colors ${
+              currentPage === 1
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:bg-muted"
+            }`}
+          >
             前へ
           </button>
-          <button className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors font-medium">
+          <span className="text-sm text-muted-foreground">
+            {currentPage} / {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            className={`px-4 py-2 border border-border rounded-lg font-medium transition-colors ${
+              currentPage === totalPages
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:bg-muted"
+            }`}
+          >
             次へ
           </button>
         </div>

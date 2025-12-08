@@ -14,6 +14,7 @@ interface Payment {
   due_date: string;
   paid_date: string | null;
   client_name: string;
+  created_at: string;
 }
 
 export default function PaymentsPage() {
@@ -27,10 +28,13 @@ export default function PaymentsPage() {
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
-        .order("due_date", { ascending: true });
+        .order("created_at", { ascending: false });
 
       if (!error && data) {
+        console.log(`[PaymentsPage] DB取得件数: ${data.length}件`);
         setPayments(data as Payment[]);
+      } else if (error) {
+        console.error('[PaymentsPage] DB取得エラー:', error);
       }
       setLoading(false);
     };
@@ -110,25 +114,37 @@ export default function PaymentsPage() {
               </tr>
             </thead>
             <tbody>
-              {payments.map((p) => (
-                <tr key={p.id} className="border-b border-border hover:bg-muted/50">
-                  <Td>{p.invoice_number}</Td>
-                  <Td>{p.client_name}</Td>
-                  <Td>¥{Number(p.amount).toLocaleString()}</Td>
-                  <Td>
-                    <StatusBadge status={p.status} />
-                  </Td>
-                  <Td>{p.due_date}</Td>
-                  <Td>{p.paid_date || "-"}</Td>
-                  <Td>
-                    <Link href={`/payments/${p.id}`}>
-                      <button className="px-3 py-1 border border-primary text-primary font-medium rounded-lg text-xs hover:bg-primary hover:text-primary-foreground transition-colors">
-                        詳細
-                      </button>
-                    </Link>
-                  </Td>
-                </tr>
-              ))}
+              {payments.map((p) => {
+                const isNew = new Date(p.created_at).getTime() > Date.now() - 24 * 60 * 60 * 1000;
+                return (
+                  <tr key={p.id} className="border-b border-border hover:bg-muted/50">
+                    <Td>
+                      <div className="flex items-center gap-2">
+                        {p.invoice_number}
+                        {isNew && (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded-md">
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                    </Td>
+                    <Td>{p.client_name}</Td>
+                    <Td>¥{Number(p.amount).toLocaleString()}</Td>
+                    <Td>
+                      <StatusBadge status={p.status} />
+                    </Td>
+                    <Td>{p.due_date}</Td>
+                    <Td>{p.paid_date || "-"}</Td>
+                    <Td>
+                      <Link href={`/payments/${p.id}`}>
+                        <button className="px-3 py-1 border border-primary text-primary font-medium rounded-lg text-xs hover:bg-primary hover:text-primary-foreground transition-colors">
+                          詳細
+                        </button>
+                      </Link>
+                    </Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
-import { Upload, FileText, Image as ImageIcon, X, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Calendar as CalendarIcon, ChevronDown } from "lucide-react"
+import { Upload, FileText, Image as ImageIcon, X, Loader2, CheckCircle, AlertCircle, Plus, Trash2, Calendar as CalendarIcon, ChevronDown, Check } from "lucide-react"
 import { invoiceImportService } from "@/lib/invoice-import-service"
 import { useStore } from "@/lib/store"
 import { Invoice, OCRResult } from "@/lib/types"
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -43,19 +44,19 @@ interface ImportedFile {
   error?: string
   progress?: number // 0-100のOCR進捗
   currentStep?: string // 現在の処理ステップの説明
+  checked: boolean // チェックボックスの状態
   result?: {
     invoice: Partial<Invoice>
     ocrData: OCRResult
   }
+  extractedData?: InvoiceData | null // ファイルごとのOCR抽出データ
+  ocrConfidence?: number // ファイルごとのOCR信頼度
 }
 
 export default function InvoiceImport() {
   const { clients, addInvoice, addClient } = useStore()
   const [importedFiles, setImportedFiles] = useState<ImportedFile[]>([])
   const [selectedFile, setSelectedFile] = useState<ImportedFile | null>(null)
-  const [extractedData, setExtractedData] = useState<InvoiceData | null>(null)
-  const [ocrConfidence, setOcrConfidence] = useState<number>(0)
-  const [hasShownToast, setHasShownToast] = useState<boolean>(false)
   const [formData, setFormData] = useState({
     invoiceNumber: '',
     issueDate: '',
@@ -82,6 +83,7 @@ export default function InvoiceImport() {
       file,
       preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
       status: "idle" as ProcessingStatus,
+      checked: false, // デフォルトは未チェック
     }))
 
     setImportedFiles((prev) => [...prev, ...newFiles])
@@ -100,6 +102,7 @@ export default function InvoiceImport() {
       "image/png": [".png"],
     },
     maxSize: 10 * 1024 * 1024, // 10MB
+    maxFiles: 10, // 最大10枚まで同時アップロード可能
   })
 
   const processFile = async (importedFile: ImportedFile) => {
@@ -165,10 +168,6 @@ export default function InvoiceImport() {
         // 信頼度スコアを取得
         confidence = invoiceData.metadata.ocrConfidence
         
-        // ステート変数に保存
-        setExtractedData(invoiceData)
-        setOcrConfidence(confidence)
-        
         console.log('[OCR Integration] InvoiceData抽出成功:', {
           id: invoiceData.id,
           confidence: confidence,
@@ -182,7 +181,7 @@ export default function InvoiceImport() {
 
       await new Promise((resolve) => setTimeout(resolve, 300))
 
-      // ステップ5: 完了
+      // ステップ5: 完了（ファイルごとのOCRデータを保存）
       setImportedFiles((prev) =>
         prev.map((f) =>
           f.file === importedFile.file
@@ -195,10 +194,23 @@ export default function InvoiceImport() {
                   invoice: result.invoice,
                   ocrData: result.ocrData,
                 },
+                extractedData: invoiceData, // ファイルごとに保存
+                ocrConfidence: confidence, // ファイルごとに保存
               }
             : f
         )
       )
+      
+      // OCR抽出完了時のトースト通知
+      if (invoiceData && confidence > 0) {
+        const confidencePercent = Math.round(confidence * 100)
+        
+        toast({
+          title: `OCR抽出が完了しました: ${importedFile.file.name}`,
+          description: `信頼度: ${confidencePercent}%`,
+          variant: confidencePercent < 70 ? "destructive" : "default",
+        })
+      }
     } catch (error) {
       console.error("ファイル処理エラー:", error)
       
@@ -240,63 +252,46 @@ export default function InvoiceImport() {
     }
   }
 
-  // OCR抽出完了時のトースト通知（重複防止付き）
-  useEffect(() => {
-    if (extractedData && ocrConfidence > 0 && !hasShownToast) {
-      const confidencePercent = Math.round(ocrConfidence * 100)
-      
-      toast({
-        title: "OCR抽出が完了しました",
-        description: `信頼度: ${confidencePercent}%`,
-        variant: confidencePercent < 70 ? "destructive" : "default",
-      })
-      
-      setHasShownToast(true)
-    }
-  }, [extractedData, ocrConfidence, hasShownToast])
-
-  // OCR抽出データをフォームに反映する関数
-  const applyExtractedDataToForm = useCallback((data: InvoiceData) => {
-    if (!selectedFile?.result) return;
+  // OCR抽出データをフォームに反映する関数（空欄のみセット）
+  function applyExtractedDataToForm(data: InvoiceData, targetFile: ImportedFile) {
+    if (!targetFile?.result) return;
     
-    console.log('[applyExtractedDataToForm] データ反映開始', data);
+    console.log('[applyExtractedDataToForm] データ反映開始（空欄のみ）', data);
     
-    // InvoiceDataからPartial<Invoice>への変換とマッピング
+    const currentInvoice = targetFile.result.invoice;
     const updatedInvoice: Partial<Invoice> = {
-      ...selectedFile.result.invoice,
+      ...currentInvoice,
     };
 
-    // 基本情報の自動入力
+    // 基本情報の自動入力（空欄のみ）
     if (data.basicInfo) {
-      if (data.basicInfo.invoiceNumber) {
+      if (data.basicInfo.invoiceNumber && !currentInvoice.invoiceNumber) {
         updatedInvoice.invoiceNumber = data.basicInfo.invoiceNumber;
       }
-      if (data.basicInfo.issueDate) {
+      if (data.basicInfo.issueDate && !currentInvoice.issueDate) {
         updatedInvoice.issueDate = new Date(data.basicInfo.issueDate);
       }
-      // 取引日の自動入力
-      if (data.basicInfo.transactionDate) {
+      // 取引日の自動入力（notesが空の場合のみ）
+      if (data.basicInfo.transactionDate && !currentInvoice.notes) {
         const transactionDateNote = `取引日: ${data.basicInfo.transactionDate}`;
-        updatedInvoice.notes = updatedInvoice.notes
-          ? `${updatedInvoice.notes}\n${transactionDateNote}`
-          : transactionDateNote;
+        updatedInvoice.notes = transactionDateNote;
       }
-      // 通貨の自動入力
-      if (data.basicInfo.currency && data.basicInfo.currency !== 'JPY') {
+      // 通貨の自動入力（notesが空の場合のみ）
+      if (data.basicInfo.currency && data.basicInfo.currency !== 'JPY' && !currentInvoice.notes) {
         const currencyNote = `通貨: ${data.basicInfo.currency}`;
         updatedInvoice.notes = updatedInvoice.notes
           ? `${updatedInvoice.notes}\n${currencyNote}`
           : currencyNote;
       }
-      // 件名の自動入力
-      if (data.basicInfo.subject) {
+      // 件名の自動入力（notesが空の場合のみ）
+      if (data.basicInfo.subject && !currentInvoice.notes) {
         const subjectNote = `件名: ${data.basicInfo.subject}`;
         updatedInvoice.notes = updatedInvoice.notes
           ? `${updatedInvoice.notes}\n${subjectNote}`
           : subjectNote;
       }
-      // 発注番号の自動入力
-      if (data.basicInfo.orderNumber) {
+      // 発注番号の自動入力（notesが空の場合のみ）
+      if (data.basicInfo.orderNumber && !currentInvoice.notes) {
         const orderNote = `発注番号: ${data.basicInfo.orderNumber}`;
         updatedInvoice.notes = updatedInvoice.notes
           ? `${updatedInvoice.notes}\n${orderNote}`
@@ -304,39 +299,48 @@ export default function InvoiceImport() {
       }
     }
 
-    // 請求先情報の自動入力
-    if (data.billingTo && updatedInvoice.client) {
+    // 請求先情報の自動入力（空欄のみ）
+    if (data.billingTo && currentInvoice.client) {
       updatedInvoice.client = {
-        ...updatedInvoice.client,
-        name: data.billingTo.companyName,
-        // 担当者名の自動入力
-        contactPerson: data.billingTo.contactPerson || updatedInvoice.client.contactPerson,
+        ...currentInvoice.client,
       };
-      // 部署名の自動入力
-      if (data.billingTo.department) {
+      if (data.billingTo.companyName && !currentInvoice.client.name) {
+        updatedInvoice.client.name = data.billingTo.companyName;
+      }
+      if (data.billingTo.contactPerson && !currentInvoice.client.contactPerson) {
+        updatedInvoice.client.contactPerson = data.billingTo.contactPerson;
+      }
+      // 部署名の自動入力（memoが空の場合のみ）
+      if (data.billingTo.department && !currentInvoice.client.memo) {
         const deptMemo = `部署: ${data.billingTo.department}`;
-        updatedInvoice.client.memo = updatedInvoice.client.memo
-          ? `${updatedInvoice.client.memo}\n${deptMemo}`
-          : deptMemo;
+        updatedInvoice.client.memo = deptMemo;
       }
     }
 
-    // 金額情報の自動入力
+    // 金額情報の自動入力（空欄のみ）
     if (data.amountInfo) {
-      updatedInvoice.subtotal = data.amountInfo.subtotal;
-      updatedInvoice.tax = data.amountInfo.taxAmount;
-      updatedInvoice.total = data.amountInfo.totalAmount;
+      if (data.amountInfo.subtotal && !currentInvoice.subtotal) {
+        updatedInvoice.subtotal = data.amountInfo.subtotal;
+      }
+      if (data.amountInfo.taxAmount && !currentInvoice.tax) {
+        updatedInvoice.tax = data.amountInfo.taxAmount;
+      }
+      if (data.amountInfo.totalAmount && !currentInvoice.total) {
+        updatedInvoice.total = data.amountInfo.totalAmount;
+      }
       
-      // 税率を計算
-      if (data.amountInfo.taxBreakdown.length > 0) {
-        updatedInvoice.taxRate = data.amountInfo.taxBreakdown[0].rate;
-      } else if (data.amountInfo.subtotal > 0) {
-        updatedInvoice.taxRate = (data.amountInfo.taxAmount / data.amountInfo.subtotal) * 100;
+      // 税率を計算（空欄のみ）
+      if (!currentInvoice.taxRate) {
+        if (data.amountInfo.taxBreakdown.length > 0) {
+          updatedInvoice.taxRate = data.amountInfo.taxBreakdown[0].rate;
+        } else if (data.amountInfo.subtotal > 0) {
+          updatedInvoice.taxRate = (data.amountInfo.taxAmount / data.amountInfo.subtotal) * 100;
+        }
       }
     }
 
-    // 発行者情報の自動入力
-    if (data.issuerInfo) {
+    // 発行者情報の自動入力（空欄のみ）
+    if (data.issuerInfo && !currentInvoice.issuerInfo) {
       updatedInvoice.issuerInfo = {
         name: data.issuerInfo.name,
         address: data.issuerInfo.address,
@@ -346,64 +350,51 @@ export default function InvoiceImport() {
       };
     }
 
-    // 支払条件の自動入力
+    // 支払条件の自動入力（空欄のみ）
     if (data.paymentTerms) {
-      if (data.paymentTerms.dueDate) {
+      if (data.paymentTerms.dueDate && !currentInvoice.dueDate) {
         updatedInvoice.dueDate = new Date(data.paymentTerms.dueDate);
       }
       
-      updatedInvoice.paymentInfo = {
-        bankName: data.paymentTerms.bankName || undefined,
-        branchName: data.paymentTerms.branchName || undefined,
-        accountType: data.paymentTerms.accountType || undefined,
-        accountNumber: data.paymentTerms.accountNumber || undefined,
-        accountHolder: data.paymentTerms.accountHolder || undefined,
-      };
-      
-      // 支払条件の自動入力
-      if (data.paymentTerms.paymentCondition) {
-        const paymentConditionNote = `支払条件: ${data.paymentTerms.paymentCondition}`;
-        updatedInvoice.notes = updatedInvoice.notes
-          ? `${updatedInvoice.notes}\n${paymentConditionNote}`
-          : paymentConditionNote;
-      }
-      
-      // 振込手数料負担の自動入力
-      if (data.paymentTerms.feeBearer) {
-        const feeBearerNote = `振込手数料負担: ${data.paymentTerms.feeBearer}`;
-        updatedInvoice.notes = updatedInvoice.notes
-          ? `${updatedInvoice.notes}\n${feeBearerNote}`
-          : feeBearerNote;
+      if (!currentInvoice.paymentInfo || Object.keys(currentInvoice.paymentInfo).length === 0) {
+        updatedInvoice.paymentInfo = {
+          bankName: data.paymentTerms.bankName || undefined,
+          branchName: data.paymentTerms.branchName || undefined,
+          accountType: data.paymentTerms.accountType || undefined,
+          accountNumber: data.paymentTerms.accountNumber || undefined,
+          accountHolder: data.paymentTerms.accountHolder || undefined,
+        };
       }
     }
 
-    // 明細行の自動入力
+    // 明細行の自動入力（既存がない場合のみセット、ある場合は追加）
     if (data.lineItems && data.lineItems.length > 0) {
-      updatedInvoice.lineItems = data.lineItems.map(item => ({
-        id: item.id,
-        description: item.description,
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || item.amount,
-        amount: item.amount,
-      }));
+      if (!currentInvoice.lineItems || currentInvoice.lineItems.length === 0) {
+        updatedInvoice.lineItems = data.lineItems.map(item => ({
+          id: item.id,
+          description: item.description,
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || item.amount,
+          amount: item.amount,
+        }));
+      }
+      // 既存の明細がある場合は追加しない（ユーザー編集を保護）
     }
 
-    // メタデータ情報の反映
+    // メタデータ情報の反映（空欄のみ）
     if (data.metadata) {
-      updatedInvoice.source = data.metadata.source;
-      updatedInvoice.status = data.metadata.status;
-      if (data.metadata.notes) {
-        updatedInvoice.notes = data.metadata.notes;
+      if (data.metadata.source && !currentInvoice.source) {
+        updatedInvoice.source = data.metadata.source;
       }
-      if (data.metadata.paidDate) {
-        updatedInvoice.paidDate = new Date(data.metadata.paidDate);
+      if (data.metadata.status && !currentInvoice.status) {
+        updatedInvoice.status = data.metadata.status;
       }
     }
 
     // ファイルの結果を更新
     setImportedFiles((prev) =>
       prev.map((f) =>
-        f.file === selectedFile.file
+        f.file === targetFile.file
           ? {
               ...f,
               result: {
@@ -417,7 +408,7 @@ export default function InvoiceImport() {
 
     // selectedFileも更新（UIに即座に反映）
     setSelectedFile(prev =>
-      prev && prev.file === selectedFile.file
+      prev && prev.file === targetFile.file
         ? {
             ...prev,
             result: {
@@ -428,8 +419,8 @@ export default function InvoiceImport() {
         : prev
     );
 
-    console.log('[applyExtractedDataToForm] フォームへの自動入力完了', updatedInvoice);
-  }, [selectedFile]);
+    console.log('[applyExtractedDataToForm] フォームへの自動入力完了（空欄のみ）', updatedInvoice);
+  }
   /**
    * OCR で抽出したデータを formData に反映する関数
    * UI はまだ更新しないため、formData の setFormData のみ行う
@@ -479,28 +470,33 @@ export default function InvoiceImport() {
   }
 
 
-  // extractedDataをフォームに自動入力（applyExtractedDataToForm関数を呼び出し）
+  // selectedFileが変更されたときにファイルごとのOCRデータをフォームに反映
+  // 初回のみ実行（OCR完了時のみ）
   useEffect(() => {
-    if (extractedData && selectedFile && selectedFile.result) {
-      // 開発環境でのみデバッグログを出力
-      if (process.env.NODE_ENV === 'development') {
-        console.log('抽出されたデータ:', extractedData)
-        console.log('OCR信頼度:', ocrConfidence)
-      }
+    if (selectedFile && selectedFile.extractedData && selectedFile.result && selectedFile.status === 'success') {
+      // 既に反映済みかチェック（extractedDataが存在し、かつinvoiceに最低限のデータがある場合は既に反映済み）
+      const alreadyApplied = selectedFile.result.invoice.invoiceNumber ||
+                             selectedFile.result.invoice.total ||
+                             (selectedFile.result.invoice.lineItems && selectedFile.result.invoice.lineItems.length > 0);
       
-      // applyExtractedDataToForm関数を呼び出してフォームに反映
-      applyExtractedDataToForm(extractedData)
+      // まだ反映されていない場合のみ実行
+      if (!alreadyApplied) {
+        // 開発環境でのみデバッグログを出力
+        if (process.env.NODE_ENV === 'development') {
+          console.log('抽出されたデータ:', selectedFile.extractedData)
+          console.log('OCR信頼度:', selectedFile.ocrConfidence)
+        }
+        
+        // applyExtractedDataToForm関数を呼び出してフォームに反映
+        applyExtractedDataToForm(selectedFile.extractedData, selectedFile)
+      }
     }
-  }, [extractedData, selectedFile?.file])
+  }, [selectedFile?.file, selectedFile?.status])
 
   const removeFile = (file: File) => {
     setImportedFiles((prev) => prev.filter((f) => f.file !== file))
     if (selectedFile?.file === file) {
       setSelectedFile(null)
-      // ファイル削除時にトーストフラグをリセット
-      setHasShownToast(false)
-      setExtractedData(null)
-      setOcrConfidence(0)
     }
   }
 
@@ -518,6 +514,7 @@ export default function InvoiceImport() {
     } = await supabase.auth.getUser();
 
     if (!user) {
+      console.error('[confirmImport] ユーザー情報が取得できませんでした');
       toast({
         title: "エラー",
         description: "ログインユーザー情報が取得できませんでした。",
@@ -526,9 +523,17 @@ export default function InvoiceImport() {
       return;
     }
 
+    console.log('[confirmImport] インポート開始:', {
+      invoiceNumber: invoice.invoiceNumber,
+      clientName: invoice.client?.name,
+      total: invoice.total,
+      userId: user.id,
+    });
+
     // 請求書を Supabase に保存
-    const { error } = await supabase.from("invoices").insert({
-      id: crypto.randomUUID(),
+    const invoiceId = crypto.randomUUID();
+    const { data, error } = await supabase.from("invoices").insert({
+      id: invoiceId,
       user_id: user.id,
       invoice_number: invoice.invoiceNumber ?? "",
       client_name: invoice.client?.name ?? "",
@@ -538,60 +543,121 @@ export default function InvoiceImport() {
       paid_date: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    }).select();
 
     if (error) {
+      console.error('[confirmImport] Supabase保存エラー:', error);
       toast({
         title: "保存エラー",
-        description: "請求書を保存できませんでした。",
+        description: `請求書を保存できませんでした: ${error.message}`,
         variant: "destructive",
       });
       return;
     }
 
-    // Supabase へ保存が成功した後に追加
-    const clientNameFromImport = (invoice as any).clientName ?? invoice.client?.name ?? "";
-
-    addInvoice({
-      id: crypto.randomUUID(),
-      invoiceNumber: (invoice as any).invoiceNumber ?? "",
-      client: {
-        id: crypto.randomUUID(),
-        name: clientNameFromImport,
-        email: "",
-        phone: "",
-        address: "",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      issueDate: invoice.issueDate ? new Date(invoice.issueDate as any) : new Date(),
-      dueDate: invoice.dueDate ? new Date(invoice.dueDate as any) : new Date(),
-      lineItems: invoice.lineItems ?? [],
-      subtotal: invoice.subtotal ?? 0,
-      tax: invoice.tax ?? 0,
-      taxRate: invoice.taxRate ?? 0,
-      total: invoice.total ?? 0,
-      status: (invoice.status as InvoiceStatus) ?? "unpaid",
-      paidDate: invoice.paidDate ?? undefined,
-      notes: invoice.notes ?? "",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      source: invoice.source ?? undefined,
-      attachments: invoice.attachments ?? [],
-      ocrData: invoice.ocrData ?? undefined,
-      paymentInfo: invoice.paymentInfo ?? undefined,
-      isReadonly: false,
-      originalPdfAttachmentId: invoice.originalPdfAttachmentId ?? undefined,
-      issuerInfo: invoice.issuerInfo ?? undefined,
-      pdfStorageLocation: "indexeddb",
-    });
+    console.log('[confirmImport] Supabase保存成功:', data);
 
     // UI 更新
     removeFile(importedFile.file);
 
     toast({
       title: "保存完了",
-      description: "請求書が支払管理に追加されました！",
+      description: "請求書が支払管理に追加されました!",
+    });
+  };
+
+  // すべて選択
+  const selectAll = () => {
+    setImportedFiles((prev) =>
+      prev.map((f) => ({ ...f, checked: true }))
+    );
+  };
+
+  // チェック済みをインポート
+  const importChecked = async () => {
+    const checkedFiles = importedFiles.filter((f) => f.checked && f.status === "success");
+    
+    if (checkedFiles.length === 0) {
+      toast({
+        title: "エラー",
+        description: "インポート可能なファイルが選択されていません。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log(`[importChecked] バッチインポート開始: ${checkedFiles.length}件`);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of checkedFiles) {
+      try {
+        await confirmImport(file);
+        successCount++;
+      } catch (error) {
+        console.error("[importChecked] インポートエラー:", error);
+        errorCount++;
+      }
+    }
+    
+    console.log(`[importChecked] バッチインポート完了: 成功${successCount}件, 失敗${errorCount}件`);
+
+    // バッチインポート完了後にまとめてファイルを削除
+    setImportedFiles((prev) => prev.filter((f) => !checkedFiles.includes(f)));
+    if (selectedFile && checkedFiles.includes(selectedFile)) {
+      setSelectedFile(null);
+    }
+
+    toast({
+      title: "インポート完了",
+      description: `${successCount}件の請求書をインポートしました。${errorCount > 0 ? `（${errorCount}件失敗）` : ""}`,
+    });
+  };
+
+  // すべてインポート（確認省略）
+  const importAll = async () => {
+    const successFiles = importedFiles.filter((f) => f.status === "success");
+    
+    if (successFiles.length === 0) {
+      toast({
+        title: "エラー",
+        description: "インポート可能なファイルがありません。",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const confirmed = window.confirm("すべての請求書を確認なしでインポートします。よろしいですか？");
+    
+    if (!confirmed) {
+      return;
+    }
+
+    console.log(`[importAll] 全件インポート開始: ${successFiles.length}件`);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of successFiles) {
+      try {
+        await confirmImport(file);
+        successCount++;
+      } catch (error) {
+        console.error("[importAll] インポートエラー:", error);
+        errorCount++;
+      }
+    }
+    
+    console.log(`[importAll] 全件インポート完了: 成功${successCount}件, 失敗${errorCount}件`);
+    
+    // バッチインポート完了後にまとめてファイルを削除
+    setImportedFiles([]);
+    setSelectedFile(null);
+
+    toast({
+      title: "インポート完了",
+      description: `${successCount}件の請求書をインポートしました。${errorCount > 0 ? `（${errorCount}件失敗）` : ""}`,
     });
   };
 
@@ -637,7 +703,7 @@ export default function InvoiceImport() {
   return (
     <div className="p-8 lg:p-12">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-foreground mb-2">請求書インポート</h1>
+        <h1 className="text-4xl font-bold text-foreground mb-2">請求書読込</h1>
         <p className="text-muted-foreground">PDFまたは画像ファイルから請求書データを自動抽出</p>
       </div>
 
@@ -655,7 +721,7 @@ export default function InvoiceImport() {
         </p>
         <p className="text-sm text-muted-foreground mb-4">または クリックしてファイルを選択</p>
         <p className="text-xs text-muted-foreground">
-          対応形式: PDF, JPEG, PNG（最大10MB）
+          対応形式: PDF, JPEG, PNG（最大10MB、10枚まで同時アップロード可能）
         </p>
       </div>
 
@@ -664,56 +730,98 @@ export default function InvoiceImport() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* ファイル一覧 */}
           <div className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-xl font-bold text-foreground mb-4">アップロードファイル</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-foreground">アップロードファイル</h2>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAll}
+                >
+                  すべて選択
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={importChecked}
+                >
+                  チェック済みをインポート
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={importAll}
+                >
+                  すべてインポート
+                </Button>
+              </div>
+            </div>
             <div className="space-y-3">
               {importedFiles.map((importedFile, index) => (
                 <div
                   key={index}
-                  className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                  className={`flex items-center gap-3 p-3 border rounded-lg transition-colors ${
                     selectedFile?.file === importedFile.file
                       ? "border-primary bg-primary/5"
                       : "border-border hover:bg-muted/50"
                   }`}
-                  onClick={() => setSelectedFile(importedFile)}
                 >
-                  {importedFile.file.type === "application/pdf" ? (
-                    <FileText className="text-red-500" size={24} />
-                  ) : (
-                    <ImageIcon className="text-blue-500" size={24} />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {importedFile.file.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(importedFile.file.size)}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(importedFile.status)}
-                      <span className="text-xs text-muted-foreground">
-                        {getStatusText(importedFile.status, importedFile.currentStep)}
-                      </span>
-                    </div>
-                    {importedFile.progress !== undefined && importedFile.status !== "success" && importedFile.status !== "error" && (
-                      <div className="w-20 bg-muted rounded-full h-1.5">
-                        <div
-                          className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                          style={{ width: `${importedFile.progress}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeFile(importedFile.file)
+                  <Checkbox
+                    checked={importedFile.checked}
+                    onCheckedChange={(checked) => {
+                      setImportedFiles((prev) =>
+                        prev.map((f) =>
+                          f.file === importedFile.file
+                            ? { ...f, checked: !!checked }
+                            : f
+                        )
+                      );
                     }}
-                    className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div
+                    className="flex items-center gap-3 flex-1 cursor-pointer"
+                    onClick={() => setSelectedFile(importedFile)}
                   >
-                    <X size={16} className="text-destructive" />
-                  </button>
+                    {importedFile.file.type === "application/pdf" ? (
+                      <FileText className="text-red-500" size={24} />
+                    ) : (
+                      <ImageIcon className="text-blue-500" size={24} />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {importedFile.file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(importedFile.file.size)}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(importedFile.status)}
+                        <span className="text-xs text-muted-foreground">
+                          {getStatusText(importedFile.status, importedFile.currentStep)}
+                        </span>
+                      </div>
+                      {importedFile.progress !== undefined && importedFile.status !== "success" && importedFile.status !== "error" && (
+                        <div className="w-20 bg-muted rounded-full h-1.5">
+                          <div
+                            className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${importedFile.progress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeFile(importedFile.file)
+                      }}
+                      className="p-1 hover:bg-destructive/10 rounded transition-colors"
+                    >
+                      <X size={16} className="text-destructive" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -742,25 +850,25 @@ export default function InvoiceImport() {
                 {selectedFile.status === "success" && selectedFile.result && (
                   <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                     {/* OCR信頼度バー */}
-                    <Card className={ocrConfidence < 0.7 ? "border-yellow-500 bg-yellow-50/50" : ""}>
+                    <Card className={(selectedFile.ocrConfidence ?? 0) < 0.7 ? "border-yellow-500 bg-yellow-50/50" : ""}>
                       <CardContent className="pt-4">
                         <Label className="text-sm font-medium">OCR信頼度</Label>
                         <div className="flex items-center gap-2 mt-2">
                           <div className="flex-1 bg-muted rounded-full h-2">
                             <div
                               className={`h-2 rounded-full transition-all ${
-                                ocrConfidence >= 0.7 ? "bg-green-500" : "bg-yellow-500"
+                                (selectedFile.ocrConfidence ?? 0) >= 0.7 ? "bg-green-500" : "bg-yellow-500"
                               }`}
                               style={{
-                                width: `${(selectedFile.result.ocrData.confidence * 100).toFixed(0)}%`,
+                                width: `${((selectedFile.ocrConfidence ?? 0) * 100).toFixed(0)}%`,
                               }}
                             />
                           </div>
                           <span className="text-sm font-medium">
-                            {(selectedFile.result.ocrData.confidence * 100).toFixed(0)}%
+                            {((selectedFile.ocrConfidence ?? 0) * 100).toFixed(0)}%
                           </span>
                         </div>
-                        {ocrConfidence < 0.7 && (
+                        {(selectedFile.ocrConfidence ?? 0) < 0.7 && (
                           <p className="text-xs text-yellow-700 mt-1">
                             ⚠️ 信頼度が低いため、内容を確認してください
                           </p>
@@ -812,7 +920,7 @@ export default function InvoiceImport() {
                                     : prev
                                 )
                               }}
-                              className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
+                              className={(selectedFile.ocrConfidence ?? 0) < 0.7 ? "bg-yellow-50" : ""}
                             />
                           </div>
                           <div>
@@ -995,7 +1103,7 @@ export default function InvoiceImport() {
                                       : prev
                                   )
                                 }}
-                                className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
+                                className={(selectedFile.ocrConfidence ?? 0) < 0.7 ? "bg-yellow-50" : ""}
                               />
                             </div>
                             <div>
@@ -1268,7 +1376,7 @@ export default function InvoiceImport() {
                                       : prev
                                   )
                                 }}
-                                className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
+                                className={(selectedFile.ocrConfidence ?? 0) < 0.7 ? "bg-yellow-50" : ""}
                               />
                             </div>
                             <div>
@@ -1467,7 +1575,7 @@ export default function InvoiceImport() {
                                     : prev
                                 )
                               }}
-                              className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
+                              className={(selectedFile.ocrConfidence ?? 0) < 0.7 ? "bg-yellow-50" : ""}
                             />
                           </div>
                           <div>
@@ -1564,7 +1672,7 @@ export default function InvoiceImport() {
                                     : prev
                                 )
                               }}
-                              className={ocrConfidence < 0.7 ? "bg-yellow-50" : ""}
+                              className={(selectedFile.ocrConfidence ?? 0) < 0.7 ? "bg-yellow-50" : ""}
                             />
                           </div>
                           <div>
@@ -1606,7 +1714,7 @@ export default function InvoiceImport() {
                                     : prev
                                 )
                               }}
-                              className={`font-bold text-lg ${ocrConfidence < 0.7 ? "bg-yellow-50" : ""}`}
+                              className={`font-bold text-lg ${(selectedFile.ocrConfidence ?? 0) < 0.7 ? "bg-yellow-50" : ""}`}
                             />
                           </div>
                         </div>
@@ -2089,6 +2197,20 @@ export default function InvoiceImport() {
                                                       : f
                                                   )
                                                 )
+                                                setSelectedFile(prev =>
+                                                  prev && prev.file === selectedFile.file
+                                                    ? {
+                                                        ...prev,
+                                                        result: {
+                                                          ...prev.result!,
+                                                          invoice: {
+                                                            ...prev.result!.invoice,
+                                                            lineItems: prev.result!.invoice.lineItems?.filter((_, i) => i !== index),
+                                                          },
+                                                        },
+                                                      }
+                                                    : prev
+                                                )
                                               }}
                                             >
                                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -2124,6 +2246,20 @@ export default function InvoiceImport() {
                                               }
                                             : f
                                         )
+                                      )
+                                      setSelectedFile(prev =>
+                                        prev && prev.file === selectedFile.file
+                                          ? {
+                                              ...prev,
+                                              result: {
+                                                ...prev.result!,
+                                                invoice: {
+                                                  ...prev.result!.invoice,
+                                                  lineItems: [...(prev.result!.invoice.lineItems || []), newItem],
+                                                },
+                                              },
+                                            }
+                                          : prev
                                       )
                                     }}
                                     className="w-full"
@@ -2161,6 +2297,20 @@ export default function InvoiceImport() {
                                               }
                                             : f
                                         )
+                                      )
+                                      setSelectedFile(prev =>
+                                        prev && prev.file === selectedFile.file
+                                          ? {
+                                              ...prev,
+                                              result: {
+                                                ...prev.result!,
+                                                invoice: {
+                                                  ...prev.result!.invoice,
+                                                  lineItems: [newItem],
+                                                },
+                                              },
+                                            }
+                                          : prev
                                       )
                                     }}
                                   >

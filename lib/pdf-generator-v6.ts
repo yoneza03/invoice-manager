@@ -20,7 +20,23 @@ export async function downloadInvoicePDFV6(invoice: Invoice, companyInfo: any) {
   yPos += 15
 
   // 期限切れ判定: 支払期限が現在日時を過ぎているかチェック
-  const isExpired = new Date(invoice.dueDate) < new Date()
+  const isPaid = invoice.paidDate != null
+  const isExpired = !isPaid && new Date(invoice.dueDate) < new Date()
+
+  doc.setFontSize(10)
+
+  if (isPaid) {
+    doc.setTextColor(22, 163, 74) // 緑
+    doc.text(`Status: Paid (支払済)`, 150, yPos)
+  } else if (isExpired) {
+    doc.setTextColor(239, 68, 68) // 赤
+    doc.text(`Status: Overdue (期限切)`, 150, yPos)
+  } else {
+    doc.setTextColor(0, 0, 0)
+    doc.text(`Status: Unpaid (未払い)`, 150, yPos)
+  }
+
+  doc.setTextColor(0, 0, 0) // 戻す
 
   // 請求書番号とステータス
   doc.setFontSize(10)

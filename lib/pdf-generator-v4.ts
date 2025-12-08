@@ -6,9 +6,23 @@ export async function downloadInvoicePDFV4(invoice: Invoice, companyInfo: any) {
   const html2pdf = (await import("html2pdf.js")).default
   
   // 期限切れ判定: 支払期限が現在日時を過ぎているかチェック
-  const isExpired = new Date(invoice.dueDate) < new Date()
-  const statusColor = "#ef4444" // 期限切の場合の赤色
-  
+  const isPaid = invoice.paidDate != null
+  const isExpired = !isPaid && new Date(invoice.dueDate) < new Date()
+
+  let statusText = ""
+  let statusColor = ""
+
+  if (isPaid) {
+    statusText = "支払済"
+    statusColor = "#16a34a"  // 緑
+  } else if (isExpired) {
+    statusText = "期限切"
+    statusColor = "#ef4444"  // 赤
+  } else {
+    statusText = "未払い"
+    statusColor = "#000000"  // 黒
+  }
+
   const html = `
     <!DOCTYPE html>
     <html lang="ja">
@@ -54,7 +68,6 @@ export async function downloadInvoicePDFV4(invoice: Invoice, companyInfo: any) {
           font-weight: 700;
           font-size: 16px;
           color: white;
-          background-color: ${statusColor};
         }
         
         .parties {

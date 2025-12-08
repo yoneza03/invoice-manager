@@ -127,12 +127,20 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
   }, [invoiceId, getInvoiceById])
 
   const addItem = () => {
-    setItems([...items, { id: generateId("item"), description: "", quantity: 1, unitPrice: 0 }])
+    console.log('[appendItem] items.length before:', items.length)
+    const newItems = [...items, { id: generateId("item"), description: "", quantity: 1, unitPrice: 0 }]
+    setItems(newItems)
+    console.log('[appendItem] items.length after:', newItems.length)
   }
 
   const removeItem = (id: string) => {
     if (items.length > 1) {
-      setItems(items.filter((item) => item.id !== id))
+      console.log('[removeItem] items.length before:', items.length)
+      const newItems = items.filter((item) => item.id !== id)
+      setItems(newItems)
+      console.log('[removeItem] items.length after:', newItems.length)
+    } else {
+      console.log('[removeItem] 最後の1行のため削除不可')
     }
   }
 
@@ -402,6 +410,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                 <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
                   <DialogTrigger asChild>
                     <button
+                      type="button"
                       className="flex items-center gap-2 px-3 py-2 border border-border text-foreground font-medium rounded-lg hover:bg-muted transition-colors text-sm"
                       disabled={isTampered}
                     >
@@ -455,6 +464,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                 </Dialog>
                 
                 <button
+                  type="button"
                   onClick={addItem}
                   className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={isTampered}
@@ -492,6 +502,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
                     disabled={isTampered}
                   />
                   <button
+                    type="button"
                     onClick={() => removeItem(item.id)}
                     className="col-span-1 p-2 hover:bg-destructive/10 rounded-lg transition-colors text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={items.length === 1 || isTampered}

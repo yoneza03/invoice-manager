@@ -1,8 +1,9 @@
 "use client"
 
+import { useEffect } from "react"
 import { ChevronLeft, Download, Send, Edit, AlertTriangle } from "lucide-react"
 import { useStore } from "@/lib/store"
-import { formatCurrency, formatDate } from "@/lib/api"
+import { formatCurrency, formatDate, markInvoiceAsViewed } from "@/lib/api"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
 import { Invoice } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -20,6 +21,13 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
   
   // デバッグ用ログ
   console.log('Invoice IssuerInfo:', JSON.stringify(invoice?.issuerInfo, null, 2))
+
+  // 詳細画面を開いたタイミングで既読にする
+  useEffect(() => {
+    if (invoiceId) {
+      markInvoiceAsViewed(invoiceId)
+    }
+  }, [invoiceId])
 
   if (!invoice) {
     return (

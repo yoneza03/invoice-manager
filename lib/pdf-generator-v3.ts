@@ -9,17 +9,28 @@ async function fetchFont() {
   const fontBytes = await fetch(url).then(res => res.arrayBuffer())
   return fontBytes
 }
+  async function fetchFontBold() {
+    const url =
+      'https://fonts.gstatic.com/s/notosansjp/v42/-F6jfjtqLpJZlPCgQBmwp7HFyzSD-9zVPFBEi75yY0rw-oME.ttf'; // Noto Sans JP Bold
+    const fontBytes = await fetch(url).then((res) => res.arrayBuffer());
+    return fontBytes;
+  }
+
 
 export async function generateInvoicePDFV3(invoice: Invoice, companyInfo: any) {
-  // 新しいPDFドキュメントを作成
-  const pdfDoc = await PDFDocument.create()
-  
+  // PDFドキュメントを作成
+  const pdfDoc = await PDFDocument.create();
+
   // フォントキットを登録
-  pdfDoc.registerFontkit(fontkit)
-  
-  // 日本語フォントを埋め込む
-  const fontBytes = await fetchFont()
-  const font = await pdfDoc.embedFont(fontBytes)
+  pdfDoc.registerFontkit(fontkit);
+
+  // 日本語フォント（通常）
+  const fontBytes = await fetchFont();
+  const font = await pdfDoc.embedFont(fontBytes);
+
+  // 日本語フォント（太字）
+  const fontBoldBytes = await fetchFontBold();
+  const fontBold = await pdfDoc.embedFont(fontBoldBytes);
   
   const page = pdfDoc.addPage([595.28, 841.89]) // A4サイズ
   
@@ -62,16 +73,32 @@ export async function generateInvoicePDFV3(invoice: Invoice, companyInfo: any) {
   })
 
   // 期限切れ判定: 支払期限が現在日時を過ぎている場合のみステータス表示
-  const isExpired = new Date(invoice.dueDate) < new Date()
-  
-  if (isExpired) {
-    const statusColor = rgb(0.94, 0.27, 0.27) // 赤色
-    page.drawText(`ステータス: 期限切`, {
+  const isPaid = invoice.paidDate != null
+  const isExpired = !isPaid && new Date(invoice.dueDate) < new Date()
+
+  if (isPaid) {
+    page.drawText("ステータス: 支払済", {
       x: width - margin - 150,
       y: yPosition + 40,
       size: 14,
-      font: font,
-      color: statusColor,
+      font: fontBold,
+      color: rgb(0.2, 0.6, 0.2), // 緑
+    })
+  } else if (isExpired) {
+    page.drawText("ステータス: 期限切れ", {
+      x: width - margin - 150,
+      y: yPosition + 40,
+      size: 14,
+      font: fontBold,
+      color: rgb(0.94, 0.27, 0.27), // 赤
+    })
+  } else {
+    page.drawText("ステータス: 未払い", {
+      x: width - margin - 150,
+      y: yPosition + 40,
+      size: 14,
+      font: fontBold,
+      color: rgb(0, 0, 0), // 黒
     })
   }
 

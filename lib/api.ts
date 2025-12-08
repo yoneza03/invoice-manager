@@ -453,3 +453,48 @@ export async function createTemplateFromInvoice(
 
   return await createInvoiceTemplate(userId, templateData)
 }
+
+/**
+ * 請求書を既読にする（viewed_atを更新）
+ * @param id 請求書ID
+ * @returns 更新された請求書、またはundefined（見つからない場合）
+ */
+export function markInvoiceAsViewed(id: string): Invoice | undefined {
+  try {
+    // LocalStorageから請求書データを取得
+    const invoicesJson = localStorage.getItem('invoices')
+    if (!invoicesJson) {
+      console.error('[markInvoiceAsViewed] 請求書データが見つかりません')
+      return undefined
+    }
+
+    const invoices: Invoice[] = JSON.parse(invoicesJson)
+    
+    // 指定されたIDの請求書を検索
+    const invoiceIndex = invoices.findIndex(inv => inv.id === id)
+    if (invoiceIndex === -1) {
+      console.error(`[markInvoiceAsViewed] ID ${id} の請求書が見つかりません`)
+      return undefined
+    }
+
+    // viewed_atを更新
+    const updatedInvoice = {
+      ...invoices[invoiceIndex],
+      viewed_at: new Date().toISOString(),
+      updatedAt: new Date(),
+    }
+
+    // 配列を更新
+    invoices[invoiceIndex] = updatedInvoice
+
+    // LocalStorageに保存
+    localStorage.setItem('invoices', JSON.stringify(invoices))
+
+    console.log(`[markInvoiceAsViewed] invoiceId: ${id} -> updated`)
+    return updatedInvoice
+
+  } catch (error) {
+    console.error('[markInvoiceAsViewed] エラーが発生しました:', error)
+    return undefined
+  }
+}

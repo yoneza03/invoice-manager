@@ -144,8 +144,26 @@ const styles = StyleSheet.create({
 // PDFドキュメントコンポーネント
 const InvoicePDF = ({ invoice, companyInfo }: { invoice: Invoice; companyInfo: any }) => {
   // 期限切れ判定: 支払期限が現在日時を過ぎているかチェック
-  const isExpired = new Date(invoice.dueDate) < new Date()
-  const statusColor = "#ef4444" // 期限切の場合の赤色
+  const isPaid = invoice.paidDate != null
+  const isExpired = !isPaid && new Date(invoice.dueDate) < new Date()
+
+  let statusText = ""
+  let statusColor = "black"
+
+  if (isPaid) {
+    statusText = "支払済"
+    statusColor = "#16a34a"
+  } else if (isExpired) {
+    statusText = "期限切"
+    statusColor = "#ef4444"
+  } else {
+    statusText = "未払い"
+    statusColor = "#000000"
+  }
+
+  <Text style={[styles.status, { backgroundColor: statusColor }]}>
+    {statusText}
+  </Text>
 
   return (
     <Document>

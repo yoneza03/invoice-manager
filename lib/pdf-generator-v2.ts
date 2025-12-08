@@ -49,19 +49,34 @@ export async function generateInvoicePDFV2(invoice: Invoice, companyInfo: any) {
     font: font,
   })
 
-  // 期限切れ判定: 支払期限が現在日時を過ぎている場合のみステータス表示
-  const isExpired = new Date(invoice.dueDate) < new Date()
-  
-  if (isExpired) {
-    const statusColor = rgb(0.94, 0.27, 0.27) // 赤色
-    page.drawText(`ステータス: 期限切`, {
-      x: width - margin - 150,
-      y: yPosition + 40,
-      size: 14,
-      font: fontBold,
-      color: statusColor,
-    })
+  // 支払状態を確認
+  const isPaid = invoice.paidDate !== undefined && invoice.paidDate !== null; // 支払済み
+  const isExpired = !isPaid && new Date(invoice.dueDate) < new Date();         // 未払いで期限切れ
+  const isUnpaid = !isPaid && !isExpired;                                      // 未払い（期限内）
+
+  let statusText = "";
+  let statusColor = rgb(0, 0, 0);
+
+  // ステータス判定
+  if (isPaid) {
+    statusText = "支払済";
+    statusColor = rgb(0.2, 0.6, 0.2); // 緑
+  } else if (isExpired) {
+    statusText = "期限切";
+    statusColor = rgb(0.94, 0.27, 0.27); // 赤
+  } else {
+    statusText = "未払い";
+    statusColor = rgb(0.2, 0.2, 0.2); // 黒
   }
+
+  // ステータスを描画
+  page.drawText(`ステータス: ${statusText}`, {
+    x: width - margin - 150,
+    y: yPosition + 40,
+    size: 14,
+    font: fontBold,
+    color: statusColor,
+  });
 
   yPosition -= 40
 

@@ -23,18 +23,21 @@ export function generateInvoicePDF(invoice: Invoice, companyInfo: any) {
   doc.text(`Due Date: ${formatDate(invoice.dueDate)}`, 20, 59)
   
   // 期限切れ判定: 支払期限が現在日時を過ぎている場合のみステータス表示
-  const isExpired = new Date(invoice.dueDate) < new Date()
-  
-  if (isExpired) {
-    doc.setFontSize(14)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(239, 68, 68) // 赤色
-    doc.text("OVERDUE", 170, 45)
-    doc.setFontSize(10)
-    doc.text("(期限切)", 170, 52)
+  const isPaid = invoice.paidDate != null
+  const isExpired = !isPaid && new Date(invoice.dueDate) < new Date()
+
+  if (isPaid) {
+    doc.setTextColor(22, 163, 74)
+    doc.text("PAID (支払済)", 170, 45)
+  } else if (isExpired) {
+    doc.setTextColor(239, 68, 68)
+    doc.text("OVERDUE (期限切)", 170, 45)
+  } else {
     doc.setTextColor(0, 0, 0)
-    doc.setFont("helvetica", "normal")
+    doc.text("UNPAID (未払い)", 170, 45)
   }
+
+  doc.setTextColor(0, 0, 0)
   
   // 発行者情報
   doc.setFontSize(10)

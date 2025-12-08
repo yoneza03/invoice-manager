@@ -34,7 +34,13 @@ export default function InvoiceCreate({ onNavigate }: InvoiceCreateProps) {
   };
 
   const removeItem = (id: number) => {
-    setItems(items.filter((item) => item.id !== id));
+    if (items.length > 1) {
+      const newItems = items.filter((item) => item.id !== id);
+      setItems(newItems);
+      console.log('[removeItem] 削除後の明細:', newItems);
+    } else {
+      console.log('[removeItem] 最後の1行のため削除不可');
+    }
   };
 
   // ---------------------
