@@ -332,7 +332,9 @@ export default function InvoiceImport() {
       // 税率を計算（空欄のみ）
       if (!currentInvoice.taxRate) {
         if (data.amountInfo.taxBreakdown.length > 0) {
-          updatedInvoice.taxRate = data.amountInfo.taxBreakdown[0].rate;
+          // 税率がパーセント形式（10）か小数形式（0.1）かを判定
+          const rate = data.amountInfo.taxBreakdown[0].rate;
+          updatedInvoice.taxRate = rate < 1 ? rate * 100 : rate;
         } else if (data.amountInfo.subtotal > 0) {
           updatedInvoice.taxRate = (data.amountInfo.taxAmount / data.amountInfo.subtotal) * 100;
         }
@@ -557,12 +559,37 @@ export default function InvoiceImport() {
 
     console.log('[confirmImport] Supabase保存成功:', data);
 
+    // LocalStorage（useStore）にも保存して一覧に表示されるようにする
+    const fullInvoice: Invoice = {
+      id: invoiceId,
+      invoiceNumber: invoice.invoiceNumber ?? "",
+      issueDate: invoice.issueDate ?? new Date(),
+      dueDate: invoice.dueDate ?? new Date(),
+      client: invoice.client ?? { id: "", name: "", email: "", phone: "", address: "" },
+      lineItems: invoice.lineItems ?? [],
+      subtotal: invoice.subtotal ?? 0,
+      tax: invoice.tax ?? 0,
+      taxRate: invoice.taxRate ?? 10,
+      total: invoice.total ?? 0,
+      notes: invoice.notes ?? "",
+      status: "pending" as InvoiceStatus,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      paidDate: null,
+      issuerInfo: invoice.issuerInfo,
+      paymentInfo: invoice.paymentInfo,
+    };
+
+    // useStoreのaddInvoiceを呼び出してLocalStorageにも保存
+    addInvoice(fullInvoice);
+    console.log('[confirmImport] LocalStorage保存完了');
+
     // UI 更新
     removeFile(importedFile.file);
 
     toast({
       title: "保存完了",
-      description: "請求書が支払管理に追加されました!",
+      description: "請求書が一覧と支払管理に追加されました!",
     });
   };
 
@@ -703,7 +730,7 @@ export default function InvoiceImport() {
   return (
     <div className="p-8 lg:p-12">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-foreground mb-2">請求書読込</h1>
+        <h1 className="text-4xl font-bold text-foreground mb-2">請求書インポート</h1>
         <p className="text-muted-foreground">PDFまたは画像ファイルから請求書データを自動抽出</p>
       </div>
 
@@ -1584,7 +1611,13 @@ export default function InvoiceImport() {
                               id="taxRate"
                               type="number"
                               step="0.01"
-                              value={selectedFile.result.invoice.taxRate || 10}
+                              value={
+                                selectedFile.result.invoice.taxRate
+                                  ? (selectedFile.result.invoice.taxRate < 1
+                                      ? selectedFile.result.invoice.taxRate * 100
+                                      : selectedFile.result.invoice.taxRate)
+                                  : 10
+                              }
                               onChange={(e) => {
                                 const taxRate = Number(e.target.value)
                                 const subtotal = selectedFile.result!.invoice.subtotal || 0
