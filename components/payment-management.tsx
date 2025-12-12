@@ -17,7 +17,7 @@ interface Payment {
   invoice_number: string;
   amount: number | string;
   status: "paid" | "pending" | "overdue";
-  due_date: string;
+  due_date: string | null;
   paid_date?: string | null;
 }
 
@@ -61,13 +61,16 @@ export default function PaymentManagement({ onNavigate }: PaymentManagementProps
   // 支払日または期限日を基準に月を取得
   const getMonthFromPayment = (payment: Payment): string => {
     const dateStr = payment.paid_date || payment.due_date;
+    // null チェック: dateStr が null または undefined の場合は 'unknown' を返す
+    if (!dateStr) return 'unknown';
     return dateStr.substring(0, 7); // YYYY-MM
   };
 
   // 最新月を取得
   const getLatestMonth = (payments: Payment[]): string => {
     if (payments.length === 0) return "";
-    const months = payments.map(getMonthFromPayment);
+    const months = payments.map(getMonthFromPayment).filter(m => m !== 'unknown');
+    if (months.length === 0) return "";
     return months.sort().reverse()[0];
   };
 
@@ -77,6 +80,9 @@ export default function PaymentManagement({ onNavigate }: PaymentManagementProps
 
     payments.forEach((payment) => {
       const month = getMonthFromPayment(payment);
+      // 'unknown' はグループ対象外
+      if (month === 'unknown') return;
+
       if (!groups.has(month)) {
         groups.set(month, []);
       }
@@ -289,7 +295,7 @@ export default function PaymentManagement({ onNavigate }: PaymentManagementProps
                               </SelectContent>
                             </Select>
                           </Td>
-                          <Td>{p.due_date}</Td>
+                          <Td>{p.due_date || "-"}</Td>
                           <Td>{p.paid_date || "-"}</Td>
                           <Td>
                             <Link href={`/payments/${p.id}`}>

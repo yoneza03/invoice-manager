@@ -481,9 +481,9 @@ export function extractInvoiceData(
     contactPerson: null,
   }
 
-  // TaxBreakdown の構築
+  // TaxBreakdown の構築（税率は必ず%形式（10や8）として保存）
   const taxBreakdown: TaxBreakdown[] = amounts.taxAmount > 0 ? [{
-    rate: amounts.taxRate,
+    rate: amounts.taxRate, // extractAmountsから返される税率は既に%形式（10や8）
     amount: amounts.taxAmount,
     taxableAmount: amounts.subtotal,
   }] : []
@@ -1031,8 +1031,8 @@ function extractAmounts(text: string): {
     subtotal: finalSubtotal,
     taxAmount: finalTax,
     totalAmount: total,
-    // taxRateは10や8などの数値として返す（画面表示では「10%」になる）
-    taxRate: Math.round(taxRate * 10) / 10,
+    // taxRateは10や8などの整数として返す（画面表示では「10%」になる）
+    taxRate: Math.round(taxRate),
   }
 }
 
@@ -1301,9 +1301,18 @@ function extractPaymentInfo(text: string): {
   // 支店名の抽出
   const branchNamePattern = /([ぁ-んァ-ヶー一-龠\s]{3,20}(?:支\s*店|支\s*所))/
   const branchMatch = text.match(branchNamePattern)
-  
+
   if (branchMatch) {
-    const branchName = branchMatch[1].replace(/\s+/g, "").trim()
+    let branchName = branchMatch[1].replace(/\s+/g, "").trim()
+
+    // 銀行名が含まれている場合は除外
+    if (paymentInfo.bankName && branchName.includes(paymentInfo.bankName)) {
+      branchName = branchName.replace(paymentInfo.bankName, '').trim()
+    } else {
+      // 一般的な銀行名パターンを除外
+      branchName = branchName.replace(/.*銀行/, '').trim()
+    }
+
     if (branchName.length >= 3 && branchName.length <= 15 &&
         (branchName.includes('支店') || branchName.includes('支所'))) {
       paymentInfo.branchName = branchName

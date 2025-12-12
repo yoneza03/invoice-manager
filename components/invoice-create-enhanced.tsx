@@ -279,6 +279,7 @@ export default function InvoiceCreateEnhanced({ onNavigate, invoiceId }: Invoice
         total: total,
         status: "unpaid",
         notes: notes,
+        source: "manual", // 手動作成
         createdAt: new Date(),
         updatedAt: new Date(),
       }

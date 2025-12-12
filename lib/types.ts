@@ -2,7 +2,7 @@
 export type InvoiceStatus = "paid" | "unpaid" | "overdue" | "draft"
 
 // 請求書のデータソース
-export type InvoiceSource = "manual" | "pdf_import" | "image_import"
+export type InvoiceSource = "manual" | "imported" | "pdf_import" | "image_import"
 
 // 請求書の明細行
 export interface InvoiceLineItem {
@@ -55,6 +55,7 @@ export interface Invoice {
   originalPdfAttachmentId?: string
   issuerInfo?: IssuerInfo  // 🆕 発行元情報（インポート請求書用）
   pdfStorageLocation?: 'none' | 'indexeddb'  // 🆕 PDFデータの保存場所
+  isNew?: boolean  // 🆕 新規インポートフラグ（ステータス変更時に false に更新）
   // 電子帳簿保存法対応フィールド
   dataHash?: string  // 改ざん防止用ハッシュ値
   hashGeneratedAt?: string  // ハッシュ生成日時 (ISO 8601)

@@ -82,6 +82,7 @@ export default function InvoiceCreate({ onNavigate }: InvoiceCreateProps) {
       status: "pending",
       due_date: dueDate,
       paid_date: null,
+      source: "manual", // 手動作成
     });
 
     if (error) {

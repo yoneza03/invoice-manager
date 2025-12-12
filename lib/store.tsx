@@ -599,6 +599,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateInvoiceStatus = (id: string, status: InvoiceStatus) => {
     const updatedInvoice = apiUpdateInvoiceStatus(id, status)
     if (updatedInvoice) {
+      // isNew フラグを false に更新（ステータス変更時にNEWバッジを消す）
+      updatedInvoice.isNew = false
       // ストアの状態を更新
       setInvoices(invoices.map((inv: Invoice) => (inv.id === id ? updatedInvoice : inv)))
     }

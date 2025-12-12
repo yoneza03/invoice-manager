@@ -65,7 +65,7 @@ export function updateInvoiceStatus(id: string, status: InvoiceStatus): Invoice 
     }
 
     const invoices: Invoice[] = JSON.parse(invoicesJson)
-    
+
     // 指定されたIDの請求書を検索
     const invoiceIndex = invoices.findIndex(inv => inv.id === id)
     if (invoiceIndex === -1) {
@@ -73,10 +73,11 @@ export function updateInvoiceStatus(id: string, status: InvoiceStatus): Invoice 
       return undefined
     }
 
-    // ステータスを更新
+    // ステータスとisNewフラグを更新
     const updatedInvoice = {
       ...invoices[invoiceIndex],
       status,
+      isNew: false, // ステータス変更時にNEWバッジを消す
       updatedAt: new Date(),
     }
 
@@ -210,12 +211,14 @@ function formatMonthJapanese(monthKey: string): string {
 }
 
 // 消費税を計算
-export function calculateTax(amount: number, taxRate: number = 0.1): number {
-  return Math.floor(amount * taxRate)
+// taxRateは10（%値）として渡されることを想定
+export function calculateTax(amount: number, taxRate: number = 10): number {
+  return Math.floor(amount * (taxRate / 100))
 }
 
 // 小計から合計を計算
-export function calculateTotal(subtotal: number, taxRate: number = 0.1): number {
+// taxRateは10（%値）として渡されることを想定
+export function calculateTotal(subtotal: number, taxRate: number = 10): number {
   return subtotal + calculateTax(subtotal, taxRate)
 }
 
@@ -258,9 +261,9 @@ export function validateRegistrationNumber(
       error: '登録番号を入力してください'
     }
   }
-  
+
   const trimmed = value.trim()
-  
+
   // 形式チェック: T + 13桁
   if (!/^T\d{13}$/.test(trimmed)) {
     return {
@@ -268,7 +271,7 @@ export function validateRegistrationNumber(
       error: '登録番号はT+13桁の数字で入力してください（例: T1234567890123）'
     }
   }
-  
+
   return { valid: true }
 }
 
@@ -288,7 +291,7 @@ export async function getInvoiceTemplates(userId: string): Promise<InvoiceTempla
     if (!templatesJson) {
       return []
     }
-    
+
     const templates = JSON.parse(templatesJson)
     // Date型に変換
     return templates.map((t: any) => ({
@@ -356,7 +359,7 @@ export async function updateInvoiceTemplate(
     // TODO: Supabaseで更新する実装に置き換え
     const templates = await getInvoiceTemplates(userId)
     const templateIndex = templates.findIndex(t => t.id === templateId)
-    
+
     if (templateIndex === -1) {
       console.error(`[updateInvoiceTemplate] ID ${templateId} のテンプレートが見つかりません`)
       return undefined
@@ -393,7 +396,7 @@ export async function deleteInvoiceTemplate(
     // TODO: Supabaseで削除する実装に置き換え
     const templates = await getInvoiceTemplates(userId)
     const filteredTemplates = templates.filter(t => t.id !== templateId)
-    
+
     if (filteredTemplates.length === templates.length) {
       console.error(`[deleteInvoiceTemplate] ID ${templateId} のテンプレートが見つかりません`)
       return false
@@ -469,7 +472,7 @@ export function markInvoiceAsViewed(id: string): Invoice | undefined {
     }
 
     const invoices: Invoice[] = JSON.parse(invoicesJson)
-    
+
     // 指定されたIDの請求書を検索
     const invoiceIndex = invoices.findIndex(inv => inv.id === id)
     if (invoiceIndex === -1) {

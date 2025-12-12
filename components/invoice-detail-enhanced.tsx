@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { ChevronLeft, Download, Send, Edit, AlertTriangle } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { formatCurrency, formatDate, markInvoiceAsViewed } from "@/lib/api"
 import { downloadInvoicePDFJapanese } from "@/lib/pdf-generator-japanese"
-import { Invoice } from "@/lib/types"
+import { Invoice, InvoiceStatus } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser"
 
 interface InvoiceDetailEnhancedProps {
   onNavigate: (page: string, invoiceId?: string) => void
@@ -14,13 +15,105 @@ interface InvoiceDetailEnhancedProps {
 }
 
 export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: InvoiceDetailEnhancedProps) {
-  const { invoices, settings } = useStore()
+  const { invoices: localInvoices, settings } = useStore()
   const { toast } = useToast()
-  
-  const invoice = invoiceId ? invoices.find((inv) => inv.id === invoiceId) : null
-  
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
+
+  // ★★★ Supabaseから請求書データを取得してLocalStorageとマージ ★★★
+  useEffect(() => {
+    const fetchAndMergeInvoice = async () => {
+      if (!invoiceId) {
+        setInvoice(null)
+        return
+      }
+
+      // LocalStorageから請求書を取得
+      const localInv = localInvoices.find((inv) => inv.id === invoiceId)
+
+      if (!localInv) {
+        setInvoice(null)
+        return
+      }
+
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        // ログインしていない場合はLocalStorageのみ使用
+        setInvoice(localInv)
+        return
+      }
+
+      // Supabaseから請求書を取得
+      const { data: supabaseInv, error } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("id", invoiceId)
+        .eq("user_id", user.id)
+        .single()
+
+      if (error || !supabaseInv) {
+        console.error("[invoice-detail] Supabase取得エラー:", error)
+        setInvoice(localInv)
+        return
+      }
+
+      // ★★★ LocalStorageとSupabaseをマージ（優先順位に基づく） ★★★
+      const merged: Invoice = {
+        ...localInv,
+        // Supabaseの基本フィールドをマージ
+        status: supabaseInv.status as InvoiceStatus,
+        issueDate: supabaseInv.issue_date ? new Date(supabaseInv.issue_date) : localInv.issueDate,
+        dueDate: supabaseInv.due_date ? new Date(supabaseInv.due_date) : localInv.dueDate,
+        paidDate: supabaseInv.paid_date ? new Date(supabaseInv.paid_date) : localInv.paidDate,
+        invoiceNumber: supabaseInv.invoice_number ?? localInv.invoiceNumber,
+        total: supabaseInv.amount ?? localInv.total,
+        // sourceの優先順位: LocalStorage → Supabase
+        source: localInv.source ?? (supabaseInv.source as any),
+        // client.nameのみSupabaseから更新（他のフィールドはLocalStorage優先）
+        client: {
+          ...localInv.client,
+          name: supabaseInv.client_name ?? localInv.client.name,
+        },
+        // issuerInfoの優先順位: LocalStorage → Supabaseのissuer_*フィールドから構築
+        issuerInfo: localInv.issuerInfo ?? (
+          supabaseInv.issuer_name ? {
+            name: supabaseInv.issuer_name,
+            address: supabaseInv.issuer_address ?? undefined,
+            phone: supabaseInv.issuer_tel ?? undefined,
+            email: supabaseInv.issuer_email ?? undefined,
+            registrationNumber: supabaseInv.issuer_registration_number ?? undefined,
+          } : undefined
+        ),
+        // paymentInfoの優先順位: LocalStorage → Supabaseのissuer_bank_*フィールドから構築
+        paymentInfo: localInv.paymentInfo ?? (
+          supabaseInv.issuer_bank_name ? {
+            bankName: supabaseInv.issuer_bank_name,
+            branchName: supabaseInv.issuer_bank_branch ?? undefined,
+            accountNumber: supabaseInv.issuer_bank_account ?? undefined,
+          } : undefined
+        ),
+        // lineItems はLocalStorageを絶対優先（Supabaseで上書きしない）
+      }
+
+      console.log("[invoice-detail] LocalStorage優先マージ完了:", merged)
+      console.log("[invoice-detail] IssuerInfo (LocalStorage優先):", merged.issuerInfo)
+      console.log("[invoice-detail] LineItems (LocalStorage優先):", merged.lineItems)
+      console.log("[invoice-detail] PaymentInfo (LocalStorage優先):", merged.paymentInfo)
+      setInvoice(merged)
+    }
+
+    fetchAndMergeInvoice()
+  }, [invoiceId, localInvoices])
+
   // デバッグ用ログ
-  console.log('Invoice IssuerInfo:', JSON.stringify(invoice?.issuerInfo, null, 2))
+  useEffect(() => {
+    if (invoice) {
+      console.log('Invoice IssuerInfo:', JSON.stringify(invoice.issuerInfo, null, 2))
+      console.log('Invoice LineItems:', JSON.stringify(invoice.lineItems, null, 2))
+      console.log('Invoice Status:', invoice.status)
+    }
+  }, [invoice])
 
   // 詳細画面を開いたタイミングで既読にする
   useEffect(() => {
@@ -58,7 +151,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
     switch (status) {
       case "paid":
         return "bg-green-100 text-green-800"
-      case "pending":
+      case "unpaid":
         return "bg-yellow-100 text-yellow-800"
       case "overdue":
         return "bg-red-100 text-red-800"
@@ -73,7 +166,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
     switch (status) {
       case "paid":
         return "支払済み"
-      case "pending":
+      case "unpaid":
         return "未払い"
       case "overdue":
         return "期限切れ"
@@ -87,21 +180,21 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
   // 元のPDFをダウンロードする関数
   const downloadOriginalPDF = (invoice: Invoice) => {
     const originalAttachmentId = invoice.originalPdfAttachmentId
-    
+
     if (!originalAttachmentId) {
       alert("元のPDFファイルが見つかりません")
       return
     }
-    
+
     const originalAttachment = invoice.attachments?.find(
       att => att.id === originalAttachmentId
     )
-    
+
     if (!originalAttachment || !originalAttachment.base64Data) {
       alert("元のPDFファイルが見つかりません");
       return;
     }
-    
+
     // Base64データをBlobに変換
     const byteString = atob(originalAttachment.base64Data.split(',')[1])
     const ab = new ArrayBuffer(byteString.length)
@@ -110,7 +203,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
       ia[i] = byteString.charCodeAt(i)
     }
     const blob = new Blob([ab], { type: originalAttachment.fileType })
-    
+
     // ダウンロード
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -160,7 +253,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
     }
 
     const email = invoice.client.email
-    
+
     if (!email) {
       toast({
         title: "エラー",
@@ -179,9 +272,9 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
       `期限日: ${formatDate(invoice.dueDate)}\n\n` +
       `よろしくお願いいたします。`
     )
-    
+
     window.location.href = `mailto:${email}?subject=${subject}&body=${body}`
-    
+
     toast({
       title: "メール送信",
       description: `${email} 宛にメールクライアントを開きました`,
@@ -243,8 +336,9 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
             <div>
               <p className="text-sm text-muted-foreground mb-2">発行者</p>
               <div>
-                {/* インポートデータの場合は抽出された発行者情報を表示 */}
-                {(invoice.source === "pdf_import" || invoice.source === "image_import") && invoice.issuerInfo ? (
+                {/* 優先順位: 1. issuerInfo → 2. システム設定 */}
+                {invoice.issuerInfo ? (
+                  /* インポートデータまたはissuerInfoが存在する場合 */
                   <>
                     <p className="font-semibold text-foreground">{invoice.issuerInfo.name}</p>
                     {invoice.issuerInfo.address && (
@@ -260,7 +354,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
                     )}
                   </>
                 ) : (
-                  /* 手動作成データの場合はシステム設定の自社情報を表示 */
+                  /* 手動作成データまたはissuerInfoがない場合はシステム設定を表示 */
                   <>
                     <p className="font-semibold text-foreground">{settings.company.name}</p>
                     <p className="text-sm text-muted-foreground">{settings.company.address}</p>
@@ -356,7 +450,7 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
           {/* Actions */}
           <div className="space-y-2">
             {/* インポートデータの場合は元のPDFをダウンロード */}
-            {(invoice.source === "pdf_import" || invoice.source === "image_import") ? (
+            {(invoice.source === "imported" || invoice.source === "pdf_import" || invoice.source === "image_import") ? (
               <button
                 onClick={() => downloadOriginalPDF(invoice)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
@@ -413,9 +507,9 @@ export default function InvoiceDetailEnhanced({ onNavigate, invoiceId }: Invoice
           {/* Payment Info */}
           <div className="bg-card border border-border rounded-lg p-6">
             <p className="text-sm text-muted-foreground mb-4 font-semibold">支払情報</p>
-            
-            {/* インポートデータの場合は元のPDFの支払先情報を表示 */}
-            {(invoice.source === "pdf_import" || invoice.source === "image_import") && invoice.paymentInfo ? (
+
+            {/* 優先順位: 1. paymentInfo → 2. システム設定 */}
+            {invoice.paymentInfo ? (
               <div className="space-y-3 text-sm">
                 <div className="bg-blue-50 p-3 rounded mb-3">
                   <p className="text-xs text-blue-800">

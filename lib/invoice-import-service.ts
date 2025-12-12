@@ -130,12 +130,15 @@ export class InvoiceImportService {
     }
 
     // 日付の解析
+    // OCRで抽出した値を優先、抽出できなかった場合のみデフォルト値を使用
     const issueDate = extractedFields.issueDate
       ? new Date(extractedFields.issueDate.value)
-      : new Date()
+      : undefined
     const dueDate = extractedFields.dueDate
       ? new Date(extractedFields.dueDate.value)
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30日後
+      : issueDate
+      ? new Date(issueDate.getTime() + 30 * 24 * 60 * 60 * 1000) // OCR発行日の30日後
+      : undefined
 
     // 支払情報の構築
     const paymentInfo = {
@@ -154,9 +157,7 @@ export class InvoiceImportService {
 
     return {
       id: `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      invoiceNumber:
-        extractedFields.invoiceNumber?.value ||
-        `IMP-${Date.now().toString().slice(-6)}`,
+      invoiceNumber: extractedFields.invoiceNumber?.value || "", // OCR抽出値のみ使用（自動生成廃止）
       client,
       issueDate,
       dueDate,
