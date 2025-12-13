@@ -1780,253 +1780,253 @@ export default function InvoiceImport() {
                       </CardContent>
                     </Card>
 
-{/* E. 支払条件セクション */}
-<Collapsible>
-  <Card>
-    <CardHeader>
-      <CollapsibleTrigger asChild>
-        <div className="flex items-center justify-between cursor-pointer">
-          <CardTitle className="text-base">支払条件</CardTitle>
-          <ChevronDown className="h-4 w-4 transition-transform" />
-        </div>
-      </CollapsibleTrigger>
-    </CardHeader>
-    <CollapsibleContent>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="bankName">銀行名</Label>
-            <Input
-              id="bankName"
-              value={selectedFile.result.invoice.paymentInfo?.bankName || ""}
-              onChange={(e) => {
-                setImportedFiles((prev) =>
-                  prev.map((f) =>
-                    f.file === selectedFile.file
-                      ? {
-                          ...f,
-                          result: {
-                            ...f.result!,
-                            invoice: {
-                              ...f.result!.invoice,
-                              paymentInfo: {
-                                ...f.result!.invoice.paymentInfo,
-                                bankName: e.target.value,
-                              },
-                            },
-                          },
-                        }
-                      : f
-                  )
-                )
-                setSelectedFile(prev =>
-                  prev && prev.file === selectedFile.file
-                    ? {
-                        ...prev,
-                        result: {
-                          ...prev.result!,
-                          invoice: {
-                            ...prev.result!.invoice,
-                            paymentInfo: {
-                              ...prev.result!.invoice.paymentInfo,
-                              bankName: e.target.value,
-                            },
-                          },
-                        },
-                      }
-                    : prev
-                )
-              }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="branchName">支店名</Label>
-            <Input
-              id="branchName"
-              value={selectedFile.result.invoice.paymentInfo?.branchName || ""}
-              onChange={(e) => {
-                setImportedFiles((prev) =>
-                  prev.map((f) =>
-                    f.file === selectedFile.file
-                      ? {
-                          ...f,
-                          result: {
-                            ...f.result!,
-                            invoice: {
-                              ...f.result!.invoice,
-                              paymentInfo: {
-                                ...f.result!.invoice.paymentInfo,
-                                branchName: e.target.value,
-                              },
-                            },
-                          },
-                        }
-                      : f
-                  )
-                )
-                setSelectedFile(prev =>
-                  prev && prev.file === selectedFile.file
-                    ? {
-                        ...prev,
-                        result: {
-                          ...prev.result!,
-                          invoice: {
-                            ...prev.result!.invoice,
-                            paymentInfo: {
-                              ...prev.result!.invoice.paymentInfo,
-                              branchName: e.target.value,
-                            },
-                          },
-                        },
-                      }
-                    : prev
-                )
-              }}
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="accountType">口座種別</Label>
-            <Input
-              id="accountType"
-              placeholder="普通預金"
-              value={selectedFile.result.invoice.paymentInfo?.accountType || ""}
-              onChange={(e) => {
-                setImportedFiles((prev) =>
-                  prev.map((f) =>
-                    f.file === selectedFile.file
-                      ? {
-                          ...f,
-                          result: {
-                            ...f.result!,
-                            invoice: {
-                              ...f.result!.invoice,
-                              paymentInfo: {
-                                ...f.result!.invoice.paymentInfo,
-                                accountType: e.target.value,
-                              },
-                            },
-                          },
-                        }
-                      : f
-                  )
-                )
-                setSelectedFile(prev =>
-                  prev && prev.file === selectedFile.file
-                    ? {
-                        ...prev,
-                        result: {
-                          ...prev.result!,
-                          invoice: {
-                            ...prev.result!.invoice,
-                            paymentInfo: {
-                              ...prev.result!.invoice.paymentInfo,
-                              accountType: e.target.value,
-                            },
-                          },
-                        },
-                      }
-                    : prev
-                )
-              }}
-            />
-          </div>
-          <div>
-            <Label htmlFor="accountNumber">口座番号</Label>
-            <Input
-              id="accountNumber"
-              value={selectedFile.result.invoice.paymentInfo?.accountNumber || ""}
-              onChange={(e) => {
-                setImportedFiles((prev) =>
-                  prev.map((f) =>
-                    f.file === selectedFile.file
-                      ? {
-                          ...f,
-                          result: {
-                            ...f.result!,
-                            invoice: {
-                              ...f.result!.invoice,
-                              paymentInfo: {
-                                ...f.result!.invoice.paymentInfo,
-                                accountNumber: e.target.value,
-                              },
-                            },
-                          },
-                        }
-                      : f
-                  )
-                )
-                setSelectedFile(prev =>
-                  prev && prev.file === selectedFile.file
-                    ? {
-                        ...prev,
-                        result: {
-                          ...prev.result!,
-                          invoice: {
-                            ...prev.result!.invoice,
-                            paymentInfo: {
-                              ...prev.result!.invoice.paymentInfo,
-                              accountNumber: e.target.value,
-                            },
-                          },
-                        },
-                      }
-                    : prev
-                )
-              }}
-            />
-          </div>
-        </div>
-        <div>
-          <Label htmlFor="accountHolder">口座名義</Label>
-          <Input
-            id="accountHolder"
-            value={selectedFile.result.invoice.paymentInfo?.accountHolder || ""}
-            onChange={(e) => {
-              setImportedFiles((prev) =>
-                prev.map((f) =>
-                  f.file === selectedFile.file
-                    ? {
-                        ...f,
-                        result: {
-                          ...f.result!,
-                          invoice: {
-                            ...f.result!.invoice,
-                            paymentInfo: {
-                              ...f.result!.invoice.paymentInfo,
-                              accountHolder: e.target.value,
-                            },
-                          },
-                        },
-                      }
-                    : f
-                )
-              )
-              setSelectedFile(prev =>
-                prev && prev.file === selectedFile.file
-                  ? {
-                      ...prev,
-                      result: {
-                        ...prev.result!,
-                        invoice: {
-                          ...prev.result!.invoice,
-                          paymentInfo: {
-                            ...prev.result!.invoice.paymentInfo,
-                            accountHolder: e.target.value,
-                          },
-                        },
-                      },
-                    }
-                  : prev
-              )
-            }}
-          />
-        </div>
-      </CardContent>
-    </CollapsibleContent>
-  </Card>
-</Collapsible>
+                    {/* E. 支払条件セクション */}
+                    <Collapsible>
+                      <Card>
+                        <CardHeader>
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between cursor-pointer">
+                              <CardTitle className="text-base">支払条件</CardTitle>
+                              <ChevronDown className="h-4 w-4 transition-transform" />
+                            </div>
+                          </CollapsibleTrigger>
+                        </CardHeader>
+                        <CollapsibleContent>
+                          <CardContent className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label htmlFor="bankName">銀行名</Label>
+                                <Input
+                                  id="bankName"
+                                  value={selectedFile.result.invoice.paymentInfo?.bankName || ""}
+                                  onChange={(e) => {
+                                    setImportedFiles((prev) =>
+                                      prev.map((f) =>
+                                        f.file === selectedFile.file
+                                          ? {
+                                              ...f,
+                                              result: {
+                                                ...f.result!,
+                                                invoice: {
+                                                  ...f.result!.invoice,
+                                                  paymentInfo: {
+                                                    ...f.result!.invoice.paymentInfo,
+                                                    bankName: e.target.value,
+                                                  },
+                                                },
+                                              },
+                                            }
+                                          : f
+                                      )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  bankName: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="branchName">支店名</Label>
+                                <Input
+                                  id="branchName"
+                                  value={selectedFile.result.invoice.paymentInfo?.branchName || ""}
+                                  onChange={(e) => {
+                                    setImportedFiles((prev) =>
+                                      prev.map((f) =>
+                                        f.file === selectedFile.file
+                                          ? {
+                                              ...f,
+                                              result: {
+                                                ...f.result!,
+                                                invoice: {
+                                                  ...f.result!.invoice,
+                                                  paymentInfo: {
+                                                    ...f.result!.invoice.paymentInfo,
+                                                    branchName: e.target.value,
+                                                  },
+                                                },
+                                              },
+                                            }
+                                          : f
+                                      )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  branchName: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label htmlFor="accountType">口座種別</Label>
+                                <Input
+                                  id="accountType"
+                                  placeholder="普通預金"
+                                  value={selectedFile.result.invoice.paymentInfo?.accountType || ""}
+                                  onChange={(e) => {
+                                    setImportedFiles((prev) =>
+                                      prev.map((f) =>
+                                        f.file === selectedFile.file
+                                          ? {
+                                              ...f,
+                                              result: {
+                                                ...f.result!,
+                                                invoice: {
+                                                  ...f.result!.invoice,
+                                                  paymentInfo: {
+                                                    ...f.result!.invoice.paymentInfo,
+                                                    accountType: e.target.value,
+                                                  },
+                                                },
+                                              },
+                                            }
+                                          : f
+                                      )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  accountType: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="accountNumber">口座番号</Label>
+                                <Input
+                                  id="accountNumber"
+                                  value={selectedFile.result.invoice.paymentInfo?.accountNumber || ""}
+                                  onChange={(e) => {
+                                    setImportedFiles((prev) =>
+                                      prev.map((f) =>
+                                        f.file === selectedFile.file
+                                          ? {
+                                              ...f,
+                                              result: {
+                                                ...f.result!,
+                                                invoice: {
+                                                  ...f.result!.invoice,
+                                                  paymentInfo: {
+                                                    ...f.result!.invoice.paymentInfo,
+                                                    accountNumber: e.target.value,
+                                                  },
+                                                },
+                                              },
+                                            }
+                                          : f
+                                      )
+                                    )
+                                    setSelectedFile(prev =>
+                                      prev && prev.file === selectedFile.file
+                                        ? {
+                                            ...prev,
+                                            result: {
+                                              ...prev.result!,
+                                              invoice: {
+                                                ...prev.result!.invoice,
+                                                paymentInfo: {
+                                                  ...prev.result!.invoice.paymentInfo,
+                                                  accountNumber: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : prev
+                                    )
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label htmlFor="accountHolder">口座名義</Label>
+                              <Input
+                                id="accountHolder"
+                                value={selectedFile.result.invoice.paymentInfo?.accountHolder || ""}
+                                onChange={(e) => {
+                                  setImportedFiles((prev) =>
+                                    prev.map((f) =>
+                                      f.file === selectedFile.file
+                                        ? {
+                                            ...f,
+                                            result: {
+                                              ...f.result!,
+                                              invoice: {
+                                                ...f.result!.invoice,
+                                                paymentInfo: {
+                                                  ...f.result!.invoice.paymentInfo,
+                                                  accountHolder: e.target.value,
+                                                },
+                                              },
+                                            },
+                                          }
+                                        : f
+                                    )
+                                  )
+                                  setSelectedFile(prev =>
+                                    prev && prev.file === selectedFile.file
+                                      ? {
+                                          ...prev,
+                                          result: {
+                                            ...prev.result!,
+                                            invoice: {
+                                              ...prev.result!.invoice,
+                                              paymentInfo: {
+                                                ...prev.result!.invoice.paymentInfo,
+                                                accountHolder: e.target.value,
+                                              },
+                                            },
+                                          },
+                                        }
+                                      : prev
+                                  )
+                                }}
+                              />
+                            </div>
+                          </CardContent>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
 
                     {/* F. 明細行セクション */}
                     <Card>

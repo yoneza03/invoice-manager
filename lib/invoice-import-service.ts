@@ -166,7 +166,7 @@ export class InvoiceImportService {
       tax,
       taxRate,
       total,
-      status: "imported",
+      status: "unpaid",
       paymentInfo: hasPaymentInfo ? paymentInfo : undefined,
       issuerInfo: issuerInfo,
     }

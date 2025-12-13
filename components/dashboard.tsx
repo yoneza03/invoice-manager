@@ -40,7 +40,7 @@ const statusData = [
 
 const recentInvoices = [
   { id: "INV-2024-001", client: "株式会社A", amount: "¥125,000", status: "paid", date: "2024-06-15" },
-  { id: "INV-2024-002", client: "株式会社B", amount: "¥89,500", status: "pending", date: "2024-06-14" },
+  { id: "INV-2024-002", client: "株式会社B", amount: "¥89,500", status: "unpaid", date: "2024-06-14" },
   { id: "INV-2024-003", client: "株式会社C", amount: "¥156,200", status: "overdue", date: "2024-06-10" },
   { id: "INV-2024-004", client: "株式会社D", amount: "¥73,800", status: "paid", date: "2024-06-12" },
 ]
@@ -126,7 +126,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <Tooltip />
               <Legend />
               <Line type="monotone" dataKey="paid" stroke="#4ade80" name="支払済み" />
-              <Line type="monotone" dataKey="pending" stroke="#fbbf24" name="未払い" />
+              <Line type="monotone" dataKey="unpaid" stroke="#fbbf24" name="未払い" />
               <Line type="monotone" dataKey="overdue" stroke="#ef4444" name="期限切れ" />
             </LineChart>
           </ResponsiveContainer>
@@ -167,7 +167,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <Tooltip />
             <Legend />
             <Bar dataKey="paid" fill="#4ade80" name="支払済み" />
-            <Bar dataKey="pending" fill="#fbbf24" name="未払い" />
+            <Bar dataKey="unpaid" fill="#fbbf24" name="未払い" />
             <Bar dataKey="overdue" fill="#ef4444" name="期限切れ" />
           </BarChart>
         </ResponsiveContainer>
@@ -206,12 +206,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                         invoice.status === "paid"
                           ? "bg-green-100 text-green-800"
-                          : invoice.status === "pending"
+                          : invoice.status === "unpaid"
                             ? "bg-yellow-100 text-yellow-800"
                             : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {invoice.status === "paid" ? "支払済み" : invoice.status === "pending" ? "未払い" : "期限切れ"}
+                      {invoice.status === "paid" ? "支払済み" : invoice.status === "unpaid" ? "未払い" : "期限切れ"}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-sm text-muted-foreground">{new Date(invoice.issueDate).toLocaleDateString('ja-JP')}</td>
